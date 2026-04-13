@@ -1,3 +1,92 @@
+function getAppConfig_() {
+  return {
+    liffId: getRequiredScriptProperty_('LIFF_ID'),
+    lineToken: getRequiredScriptProperty_('LINE_TOKEN'),
+    masterSheetName: getRequiredScriptProperty_('MASTER_SHEET_NAME'),
+    supplySheetName: getRequiredScriptProperty_('SUPPLY_SHEET_NAME'),
+    targetUserId: getRequiredScriptProperty_('TARGET_USER_ID')
+  };
+}
+
+function getRequiredScriptProperty_(key) {
+  const value = PropertiesService.getScriptProperties().getProperty(key);
+  if (!value) {
+    throw new Error('Missing script property: ' + key);
+  }
+  return value;
+}
+
+function appendShippingToSheet_(shippingData, config) {
+  const sheet = getRequiredSheetByName_(config.masterSheetName);
+  insertRequestRow_(sheet, toShippingRow_(shippingData));
+}
+
+function appendSupplyOrderToSheet_(orderData, config) {
+  const sheet = getRequiredSheetByName_(config.supplySheetName);
+  insertRequestRow_(sheet, toSupplyOrderRow_(orderData));
+}
+
+function insertRequestRow_(sheet, rowValues) {
+  const lock = LockService.getScriptLock();
+
+  if (!lock.tryLock(30000)) {
+    throw new Error('Another request is updating the sheet. Please try again.');
+  }
+
+  try {
+    sheet.insertRowsBefore(2, 1);
+
+    const rowRange = sheet.getRange(2, 1, 1, rowValues.length);
+    rowRange.setValues([rowValues]);
+
+    const checkboxCell = sheet.getRange(2, rowValues.length);
+    checkboxCell.insertCheckboxes();
+    checkboxCell.setValue(false);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function getRequiredSheetByName_(sheetName) {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  if (!spreadsheet) {
+    throw new Error('Active spreadsheet is not available. Use a bound script.');
+  }
+
+  const sheet = spreadsheet.getSheetByName(sheetName);
+  if (!sheet) {
+    throw new Error('Sheet not found: ' + sheetName);
+  }
+  return sheet;
+}
+
+function pushLineTextMessage_(config, messageText) {
+  const response = UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', {
+    method: 'post',
+    contentType: 'application/json',
+    headers: {
+      Authorization: 'Bearer ' + config.lineToken
+    },
+    payload: JSON.stringify({
+      to: config.targetUserId,
+      messages: [
+        {
+          type: 'text',
+          text: messageText
+        }
+      ]
+    }),
+    muteHttpExceptions: true
+  });
+
+  const statusCode = response.getResponseCode();
+  if (statusCode < 200 || statusCode >= 300) {
+    throw new Error(
+      'LINE push request failed (' + statusCode + '): ' + response.getContentText()
+    );
+  }
+}
+
 function normalizeShippingPayload_(rawData) {
   const data = ensureObject_(rawData, 'data');
   const normalized = {
@@ -70,11 +159,8 @@ function toSupplyOrderRow_(orderData) {
 }
 
 function formatOrderItemsForSheet_(items) {
-  function stripNumber(name) {
-    return String(name).replace(/^\s*\d+\.\s*/, '');
-  }
   const formattedItems = items.map(function (item) {
-    const name = stripNumber(item.name);
+    const name = stripNumber_(item.name);
     return name + ' x ' + item.qty;
   });
   const lines = [];
@@ -87,13 +173,14 @@ function formatOrderItemsForSheet_(items) {
 }
 
 function formatOrderItemsForNotification_(items) {
-  function stripNumber(name) {
-    return String(name).replace(/^\s*\d+\.\s*/, '');
-  }
   return items.map(function (item) {
-    const name = stripNumber(item.name);
+    const name = stripNumber_(item.name);
     return name + ' x ' + item.qty;
   }).join('\n');
+}
+
+function stripNumber_(name) {
+  return String(name).replace(/^\s*\d+\.\s*/, '');
 }
 
 function buildShippingNotificationText_(shippingData) {
