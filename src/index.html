@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>送り依頼フォーム</title>
+  <style>
+    body {
+      font-family: -apple-system, "Helvetica Neue", sans-serif;
+      padding: 20px;
+      background: #f4f7f9;
+      color: #333;
+      margin: 0;
+    }
+
+    h3 {
+      text-align: center;
+      color: #007bff;
+      margin: 15px 0 20px;
+    }
+
+    .form-group {
+      margin-bottom: 22px;
+    }
+
+    /* 間隔を少し広めに設定 */
+    label {
+      display: block;
+      font-weight: bold;
+      margin-bottom: 8px;
+      color: #444;
+      font-size: 14px;
+    }
+
+    .required-badge {
+      background: #ff4d4f;
+      color: white;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      margin-left: 8px;
+      vertical-align: middle;
+    }
+
+    input[type="text"],
+    input[type="date"] {
+      width: 100%;
+      padding: 14px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      box-sizing: border-box;
+      font-size: 16px;
+      outline: none;
+      transition: border 0.2s;
+    }
+
+    input:focus {
+      border-color: #007bff;
+    }
+
+    .user-name {
+      font-weight: bold;
+    }
+
+    select {
+      width: 100%;
+      padding: 14px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      box-sizing: border-box;
+      font-size: 16px;
+      outline: none;
+      transition: border 0.2s;
+      background: white;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23666' d='M6 8L0 0h12z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 14px center;
+    }
+
+    select:focus {
+      border-color: #007bff;
+    }
+
+    /* --- ステッパー（+/- ボタン） --- */
+    .qty-controls {
+      display: flex;
+      align-items: center;
+      background: #f0f0f0;
+      border-radius: 10px;
+      padding: 4px;
+    }
+
+    .btn-qty {
+      width: 60px;
+      /* さらに押しやすく大きく */
+      height: 54px;
+      border: none;
+      background: white;
+      border-radius: 8px;
+      font-size: 26px;
+      font-weight: bold;
+      cursor: pointer;
+      color: #007bff;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .qty-input {
+      flex: 1;
+      text-align: center;
+      border: none;
+      background: transparent;
+      font-size: 20px;
+      font-weight: bold;
+      outline: none;
+      pointer-events: none;
+    }
+
+    /* --- ラジオボタン --- */
+    .radio-group {
+      display: flex;
+      gap: 15px;
+      margin-top: 5px;
+    }
+
+    .radio-label {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      background: white;
+      border: 2px solid #ddd;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: all 0.2s;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .radio-label input {
+      display: none;
+    }
+
+    .radio-label:has(input:checked) {
+      border-color: #007bff;
+      background: #e7f1ff;
+      color: #007bff;
+    }
+
+    .submit-btn {
+      width: 100%;
+      padding: 18px;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 18px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 25px;
+      box-shadow: 0 4px 10px rgba(0, 123, 255, 0.3);
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .submit-btn:disabled {
+      background: #ccc;
+      box-shadow: none;
+    }
+
+    #loading {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(255, 255, 255, 0.8);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+      font-weight: bold;
+      color: #007bff;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="loading">送信中...</div>
+  <h3>🚚 送り依頼フォーム</h3>
+
+  <div class="form-group">
+    <label>依頼者</label>
+    <input type="text" id="userName" class="user-name" placeholder="氏名を入力">
+  </div>
+
+  <div class="form-group">
+    <label>運送会社</label>
+    <select id="carrier">
+      <option value=""></option>
+      <option value="クロネコヤマト">クロネコヤマト</option>
+      <option value="佐川急便">佐川急便</option>
+      <option value="西濃運輸">西濃運輸</option>
+      <option value="福山通運">福山通運</option>
+    </select>
+  </div>
+
+  <div class="form-group">
+    <label>希望着日<span class="required-badge">必須</span></label>
+    <input type="date" id="arrivalDate">
+  </div>
+
+  <div class="form-group">
+    <label>送り先<span class="required-badge">必須</span></label>
+    <input type="text" id="destination" placeholder="店舗名や納品先を入力">
+  </div>
+
+  <div class="form-group">
+    <label>最低カートン</label>
+    <div class="qty-controls">
+      <button class="btn-qty" onclick="changeStepperQty('minCt', -1)">−</button>
+      <input type="number" class="qty-input" id="minCt" value="0" min="0" readonly>
+      <button class="btn-qty" onclick="changeStepperQty('minCt', 1)">＋</button>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label>最高カートン</label>
+    <div class="qty-controls">
+      <button class="btn-qty" onclick="changeStepperQty('maxCt', -1)">−</button>
+      <input type="number" class="qty-input" id="maxCt" value="0" min="0" readonly>
+      <button class="btn-qty" onclick="changeStepperQty('maxCt', 1)">＋</button>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label>備品注文の有無</label>
+    <div class="radio-group">
+      <label class="radio-label">
+        <input type="radio" name="hasSupplies" value="無" checked> 無し
+      </label>
+      <label class="radio-label">
+        <input type="radio" name="hasSupplies" value="有"> 有り
+      </label>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label>残からの有無</label>
+    <div class="radio-group">
+      <label class="radio-label">
+        <input type="radio" name="hasRemaining" value="無" checked> 無し
+      </label>
+      <label class="radio-label">
+        <input type="radio" name="hasRemaining" value="有"> 有り
+      </label>
+    </div>
+  </div>
+
+  <button class="submit-btn" onclick="submitShipping()">依頼を送信する</button>
+
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script>
+
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbzIhakdAidm-r1mZt3GZj_5i-o2Nty1DHiG7XUiKffPaHBqcJr1RFwQjsBcI0BqmiEdEg/exec";
+    const LIFF_ID = "2009669107-iTCKuJvo";
+    const USER_NAME_STORAGE_KEY = "requestUserName";
+
+    function changeStepperQty(id, delta) {
+      const input = document.getElementById(id);
+      let val = parseInt(input.value) + delta;
+      if (val < 0) val = 0;
+      input.value = val;
+    }
+
+    async function init() {
+      try {
+        await liff.init({ liffId: LIFF_ID });
+        if (!liff.isLoggedIn()) { liff.login(); return; }
+        const profile = await liff.getProfile();
+        const savedName = localStorage.getItem(USER_NAME_STORAGE_KEY) || localStorage.getItem('shippingUserName');
+        document.getElementById('userName').value = savedName || profile.displayName;
+      } catch (err) {
+        console.error("LIFF初期化失敗", err);
+      }
+    }
+
+    async function submitShipping() {
+      const btn = document.querySelector('.submit-btn');
+
+      const hasSupplies = document.querySelector('input[name="hasSupplies"]:checked').value;
+      const hasRemaining = document.querySelector('input[name="hasRemaining"]:checked').value;
+      const carrier = document.getElementById('carrier').value || '未選択';
+
+      const data = {
+        userName: document.getElementById('userName').value,
+        carrier: carrier,
+        arrivalDate: document.getElementById('arrivalDate').value,
+        destination: document.getElementById('destination').value || "未入力",
+        minCt: document.getElementById('minCt').value,
+        maxCt: document.getElementById('maxCt').value,
+        hasSupplies: hasSupplies,
+        hasRemaining: hasRemaining
+      };
+
+      if (!data.arrivalDate) { alert("「希望着日」を選択してください。"); return; }
+
+      btn.disabled = true;
+      document.getElementById('loading').style.display = 'flex';
+
+      try {
+        const resp = await fetch(GAS_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "liff_shipping",
+            data: data
+          })
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const resJson = await resp.json();
+
+        alert("送り依頼を送信しました！");
+        localStorage.setItem(USER_NAME_STORAGE_KEY, data.userName);
+        liff.closeWindow();
+      } catch (err) {
+        alert("送信エラーが発生しました: " + err.message);
+        btn.disabled = false;
+        document.getElementById('loading').style.display = 'none';
+      }
+    }
+
+    init();
+  </script>
+</body>
+
+</html>
