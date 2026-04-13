@@ -70,8 +70,12 @@ function toSupplyOrderRow_(orderData) {
 }
 
 function formatOrderItemsForSheet_(items) {
+  function stripNumber(name) {
+    return String(name).replace(/^\s*\d+\.\s*/, '');
+  }
   const formattedItems = items.map(function(item) {
-    return item.name + ' x ' + item.qty;
+    const name = stripNumber(item.name);
+    return name + ' x ' + item.qty;
   });
   const lines = [];
 
@@ -83,8 +87,12 @@ function formatOrderItemsForSheet_(items) {
 }
 
 function formatOrderItemsForNotification_(items) {
+  function stripNumber(name) {
+    return String(name).replace(/^\s*\d+\.\s*/, '');
+  }
   return items.map(function(item) {
-    return item.name + ' x ' + item.qty;
+    const name = stripNumber(item.name);
+    return name + ' x ' + item.qty;
   }).join('\n');
 }
 
