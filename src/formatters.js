@@ -64,12 +64,25 @@ function toSupplyOrderRow_(orderData) {
   return [
     new Date(),
     orderData.userName,
-    formatOrderItems_(orderData.items),
+    formatOrderItemsForSheet_(orderData.items),
     false
   ];
 }
 
-function formatOrderItems_(items) {
+function formatOrderItemsForSheet_(items) {
+  const formattedItems = items.map(function(item) {
+    return item.name + ' x ' + item.qty;
+  });
+  const lines = [];
+
+  for (let index = 0; index < formattedItems.length; index += 5) {
+    lines.push(formattedItems.slice(index, index + 5).join(' / '));
+  }
+
+  return lines.join('\n');
+}
+
+function formatOrderItemsForNotification_(items) {
   return items.map(function(item) {
     return item.name + ' x ' + item.qty;
   }).join('\n');
@@ -94,7 +107,7 @@ function buildOrderNotificationText_(orderData) {
     '【備品発注】',
     '依頼者: ' + orderData.userName,
     '注文内容:',
-    formatOrderItems_(orderData.items)
+    formatOrderItemsForNotification_(orderData.items)
   ].join('\n');
 }
 

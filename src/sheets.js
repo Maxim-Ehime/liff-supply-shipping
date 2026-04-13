@@ -9,14 +9,24 @@ function appendSupplyOrderToSheet_(orderData, config) {
 }
 
 function insertRequestRow_(sheet, rowValues) {
-  sheet.insertRowsBefore(2, 1);
+  const lock = LockService.getScriptLock();
 
-  const rowRange = sheet.getRange(2, 1, 1, rowValues.length);
-  rowRange.setValues([rowValues]);
+  if (!lock.tryLock(30000)) {
+    throw new Error('Another request is updating the sheet. Please try again.');
+  }
 
-  const checkboxCell = sheet.getRange(2, rowValues.length);
-  checkboxCell.insertCheckboxes();
-  checkboxCell.setValue(false);
+  try {
+    sheet.insertRowsBefore(2, 1);
+
+    const rowRange = sheet.getRange(2, 1, 1, rowValues.length);
+    rowRange.setValues([rowValues]);
+
+    const checkboxCell = sheet.getRange(2, rowValues.length);
+    checkboxCell.insertCheckboxes();
+    checkboxCell.setValue(false);
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function getRequiredSheetByName_(sheetName) {
