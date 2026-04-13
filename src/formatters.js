@@ -25,13 +25,13 @@ function normalizeOrderPayload_(rawData) {
     throw new Error('items must be an array.');
   }
 
-  const items = data.items.map(function(item, index) {
+  const items = data.items.map(function (item, index) {
     const row = ensureObject_(item, 'items[' + index + ']');
     return {
       name: toRequiredString_(row.name, 'items[' + index + '].name'),
       qty: toNonNegativeInteger_(row.qty, 'items[' + index + '].qty')
     };
-  }).filter(function(item) {
+  }).filter(function (item) {
     return item.qty > 0;
   });
 
@@ -73,7 +73,7 @@ function formatOrderItemsForSheet_(items) {
   function stripNumber(name) {
     return String(name).replace(/^\s*\d+\.\s*/, '');
   }
-  const formattedItems = items.map(function(item) {
+  const formattedItems = items.map(function (item) {
     const name = stripNumber(item.name);
     return name + ' x ' + item.qty;
   });
@@ -90,7 +90,7 @@ function formatOrderItemsForNotification_(items) {
   function stripNumber(name) {
     return String(name).replace(/^\s*\d+\.\s*/, '');
   }
-  return items.map(function(item) {
+  return items.map(function (item) {
     const name = stripNumber(item.name);
     return name + ' x ' + item.qty;
   }).join('\n');
@@ -98,7 +98,7 @@ function formatOrderItemsForNotification_(items) {
 
 function buildShippingNotificationText_(shippingData) {
   return [
-    '【送り依頼】',
+    '🚚送り依頼が届きました！',
     '依頼者: ' + shippingData.userName,
     '運送会社: ' + shippingData.carrier,
     '希望着日: ' + shippingData.arrivalDate,
@@ -112,7 +112,7 @@ function buildShippingNotificationText_(shippingData) {
 
 function buildOrderNotificationText_(orderData) {
   return [
-    '【備品発注】',
+    '📦️備品注文が届きました！',
     '依頼者: ' + orderData.userName,
     '注文内容:',
     formatOrderItemsForNotification_(orderData.items)
