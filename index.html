@@ -322,6 +322,7 @@
         });
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
         const resJson = await resp.json();
+        if (!resJson.ok) throw new Error(resJson.error || '送信に失敗しました');
 
         alert("送り依頼を送信しました！");
         localStorage.setItem(USER_NAME_STORAGE_KEY, data.userName);

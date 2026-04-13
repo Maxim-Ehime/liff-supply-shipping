@@ -1,11 +1,22 @@
 function appendShippingToSheet_(shippingData, config) {
   const sheet = getRequiredSheetByName_(config.masterSheetName);
-  sheet.appendRow(toShippingRow_(shippingData));
+  insertRequestRow_(sheet, toShippingRow_(shippingData));
 }
 
 function appendSupplyOrderToSheet_(orderData, config) {
   const sheet = getRequiredSheetByName_(config.supplySheetName);
-  sheet.appendRow(toSupplyOrderRow_(orderData));
+  insertRequestRow_(sheet, toSupplyOrderRow_(orderData));
+}
+
+function insertRequestRow_(sheet, rowValues) {
+  sheet.insertRowsBefore(2, 1);
+
+  const rowRange = sheet.getRange(2, 1, 1, rowValues.length);
+  rowRange.setValues([rowValues]);
+
+  const checkboxCell = sheet.getRange(2, rowValues.length);
+  checkboxCell.insertCheckboxes();
+  checkboxCell.setValue(false);
 }
 
 function getRequiredSheetByName_(sheetName) {
