@@ -87,6 +87,32 @@ function pushLineTextMessage_(config, messageText) {
   }
 }
 
+// Reply to a webhook event using replyToken
+function pushLineReplyMessage_(config, replyToken, messageText) {
+  const response = UrlFetchApp.fetch('https://api.line.me/v2/bot/message/reply', {
+    method: 'post',
+    contentType: 'application/json',
+    headers: {
+      Authorization: 'Bearer ' + config.lineToken
+    },
+    payload: JSON.stringify({
+      replyToken: replyToken,
+      messages: [
+        {
+          type: 'text',
+          text: messageText
+        }
+      ]
+    }),
+    muteHttpExceptions: true
+  });
+
+  const statusCode = response.getResponseCode();
+  if (statusCode < 200 || statusCode >= 300) {
+    throw new Error('LINE reply request failed (' + statusCode + '): ' + response.getContentText());
+  }
+}
+
 function normalizeShippingPayload_(rawData) {
   const data = ensureObject_(rawData, 'data');
   const normalized = {

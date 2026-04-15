@@ -1,8 +1,15 @@
 function doPost(e) {
   try {
     const request = parseRequestBody_(e);
-    const action = toRequiredString_(request.action, 'action');
     const config = getAppConfig_();
+
+    // If this request looks like a LINE webhook (contains events array), process events
+    if (request && Array.isArray(request.events)) {
+      handleLineWebhook_(request, config);
+      return createJsonResponse_({ ok: true });
+    }
+
+    const action = toRequiredString_(request.action, 'action');
 
     if (action === 'liff_shipping') {
       const shippingData = normalizeShippingPayload_(request.data);
@@ -25,6 +32,32 @@ function doPost(e) {
       error: toErrorMessage_(error)
     });
   }
+}
+
+// Process incoming webhook events from LINE Messaging API
+function handleLineWebhook_(request, config) {
+  if (!request.events || !Array.isArray(request.events)) return;
+
+  request.events.forEach(function (event) {
+    try {
+      if (event.type !== 'message' || !event.message || event.message.type !== 'text') return;
+
+      const replyToken = event.replyToken;
+      if (!replyToken) return; // cannot reply without token
+
+      const idSent = String(event.message.text || '').trim();
+      const userId = (event.source && event.source.userId) ? event.source.userId : 'unknown';
+
+      const message = [
+        '受け取ったID: ' + idSent,
+        'あなたのuserId: ' + userId
+      ].join('\n');
+
+      pushLineReplyMessage_(config, replyToken, message);
+    } catch (err) {
+      console.error('Error handling LINE event:', err && err.message ? err.message : err);
+    }
+  });
 }
 
 function parseRequestBody_(e) {
