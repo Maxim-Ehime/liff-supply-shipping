@@ -37,6 +37,7 @@ function insertRequestRow_(sheet, rowValues) {
     sheet.insertRowsBefore(2, 1);
 
     const rowRange = sheet.getRange(2, 1, 1, rowValues.length);
+    rowRange.removeCheckboxes();
     rowRange.clearDataValidations();
     rowRange.setValues([rowValues]);
 
@@ -111,7 +112,7 @@ function normalizeShippingPayload_(rawData) {
 function normalizeOrderPayload_(rawData) {
   const data = ensureObject_(rawData, 'data');
   const userName = toOptionalString_(data.userName, '未入力');
-  const freeNote = toOptionalString_(data.freeNote, '未入力');
+  const freeNote = toOptionalString_(data.freeNote, '');
   if (!Array.isArray(data.items)) {
     throw new Error('items must be an array.');
   }
@@ -126,8 +127,8 @@ function normalizeOrderPayload_(rawData) {
     return item.qty > 0;
   });
 
-  if (items.length === 0) {
-    throw new Error('At least one item with qty > 0 is required.');
+  if (items.length === 0 && !freeNote) {
+    throw new Error('Either items with qty > 0 or freeNote is required.');
   }
 
   return {
@@ -202,12 +203,17 @@ function buildShippingNotificationText_(shippingData) {
 }
 
 function buildOrderNotificationText_(orderData) {
+  const orderItemsText = orderData.items.length > 0
+    ? formatOrderItemsForNotification_(orderData.items)
+    : '（なし）';
+  const freeNoteText = orderData.freeNote || '（なし）';
+
   return [
     '📦️備品注文が届きました！',
     '依頼者: ' + orderData.userName,
     '注文内容:',
-    formatOrderItemsForNotification_(orderData.items),
-    '自由記入: ' + orderData.freeNote
+    orderItemsText,
+    '自由記入: ' + freeNoteText
   ].join('\n');
 }
 

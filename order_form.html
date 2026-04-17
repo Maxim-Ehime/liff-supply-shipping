@@ -361,18 +361,22 @@
       const btn = document.querySelector('.submit-btn');
       try {
         const order = [];
+        const freeNote = document.getElementById('freeNote').value.trim();
+
         [...supplyList1, ...supplyList2].forEach(name => {
           const qty = parseInt(document.getElementById(name).value);
           if (qty > 0) order.push({ name: name, qty: qty });
         });
 
-        if (order.length === 0) { alert("商品を選択してください"); return; }
+        if (order.length === 0 && !freeNote) {
+          alert("備品の数量または自由記入を入力してください");
+          return;
+        }
 
         btn.disabled = true;
         document.getElementById('loading').style.display = 'flex';
 
         const userName = document.getElementById('userName').value;
-        const freeNote = document.getElementById('freeNote').value;
 
         const resp = await fetch(GAS_URL, {
           method: "POST",
