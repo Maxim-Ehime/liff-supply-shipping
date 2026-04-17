@@ -42,6 +42,19 @@
       outline: none;
     }
 
+    .free-text {
+      width: 100%;
+      min-height: 96px;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      box-sizing: border-box;
+      font-size: 16px;
+      outline: none;
+      resize: vertical;
+      font-family: inherit;
+    }
+
     /* --- タブメニュー --- */
     .tab-container {
       display: flex;
@@ -239,6 +252,11 @@
   <div id="group1" class="item-group active"></div>
   <div id="group2" class="item-group"></div>
 
+  <div class="form-group">
+    <label>自由記入</label>
+    <textarea id="freeNote" class="free-text" placeholder="補足事項があれば入力してください"></textarea>
+  </div>
+
   <div class="footer">
     <button class="submit-btn" onclick="submitOrder()">注文を確定して閉じる</button>
   </div>
@@ -343,12 +361,17 @@
       const btn = document.querySelector('.submit-btn');
       try {
         const order = [];
+        const freeNote = document.getElementById('freeNote').value.trim();
+
         [...supplyList1, ...supplyList2].forEach(name => {
           const qty = parseInt(document.getElementById(name).value);
           if (qty > 0) order.push({ name: name, qty: qty });
         });
 
-        if (order.length === 0) { alert("商品を選択してください"); return; }
+        if (order.length === 0 && !freeNote) {
+          alert("備品の数量または自由記入を入力してください");
+          return;
+        }
 
         btn.disabled = true;
         document.getElementById('loading').style.display = 'flex';
@@ -360,7 +383,7 @@
           headers: { "Content-Type": "text/plain;charset=utf-8" },
           body: JSON.stringify({
             action: "liff_order",
-            data: { userName: userName, items: order }
+            data: { userName: userName, items: order, freeNote: freeNote }
           })
         });
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
