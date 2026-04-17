@@ -110,6 +110,7 @@ function normalizeShippingPayload_(rawData) {
 function normalizeOrderPayload_(rawData) {
   const data = ensureObject_(rawData, 'data');
   const userName = toOptionalString_(data.userName, '未入力');
+  const freeNote = toOptionalString_(data.freeNote, '未入力');
   if (!Array.isArray(data.items)) {
     throw new Error('items must be an array.');
   }
@@ -130,7 +131,8 @@ function normalizeOrderPayload_(rawData) {
 
   return {
     userName: userName,
-    items: items
+    items: items,
+    freeNote: freeNote
   };
 }
 
@@ -154,6 +156,7 @@ function toSupplyOrderRow_(orderData) {
     new Date(),
     orderData.userName,
     formatOrderItemsForSheet_(orderData.items),
+    orderData.freeNote,
     false
   ];
 }
@@ -202,7 +205,8 @@ function buildOrderNotificationText_(orderData) {
     '📦️備品注文が届きました！',
     '依頼者: ' + orderData.userName,
     '注文内容:',
-    formatOrderItemsForNotification_(orderData.items)
+    formatOrderItemsForNotification_(orderData.items),
+    '自由記入: ' + orderData.freeNote
   ].join('\n');
 }
 
