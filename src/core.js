@@ -37,6 +37,7 @@ function insertRequestRow_(sheet, rowValues) {
     sheet.insertRowsBefore(2, 1);
 
     const rowRange = sheet.getRange(2, 1, 1, rowValues.length);
+    rowRange.clearDataValidations();
     rowRange.setValues([rowValues]);
 
     const checkboxCell = sheet.getRange(2, rowValues.length);
