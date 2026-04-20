@@ -49,7 +49,6 @@ function handleLineWebhook_(request, config) {
       const userId = (event.source && event.source.userId) ? event.source.userId : 'unknown';
 
       const message = [
-        '受け取ったID: ' + idSent,
         'あなたのuserId: ' + userId
       ].join('\n');
 
