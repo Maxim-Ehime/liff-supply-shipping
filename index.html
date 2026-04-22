@@ -268,6 +268,7 @@
     const GAS_URL = "https://script.google.com/macros/s/AKfycbz1GRizrjZXu0mQ-N58HgTwWJ55BuG4VteRkP4aPmhuWOaeRJNTejgVZuHRmwpsr4E/exec";
     const LIFF_ID = "2009819015-Pj5rk2Ruo";
     const USER_NAME_STORAGE_KEY = "requestUserName";
+    const POST_LOGIN_REDIRECT_KEY = "liffPostLoginRedirect";
 
     function changeStepperQty(id, delta) {
       const input = document.getElementById(id);
@@ -276,10 +277,39 @@
       input.value = val;
     }
 
+    function getCleanCurrentUrl() {
+      const url = new URL(window.location.href);
+      ['liff.state', 'access_token', 'id_token', 'code', 'state', 'friendship_status_changed'].forEach(key => {
+        url.searchParams.delete(key);
+      });
+      url.hash = '';
+      return url.toString();
+    }
+
+    function redirectToStoredPageIfNeeded() {
+      const storedRedirect = localStorage.getItem(POST_LOGIN_REDIRECT_KEY);
+      if (!storedRedirect) return false;
+
+      const currentUrl = getCleanCurrentUrl();
+      localStorage.removeItem(POST_LOGIN_REDIRECT_KEY);
+
+      if (storedRedirect !== currentUrl) {
+        window.location.replace(storedRedirect);
+        return true;
+      }
+      return false;
+    }
+
     async function init() {
       try {
         await liff.init({ liffId: LIFF_ID });
-        if (!liff.isLoggedIn()) { liff.login(); return; }
+        if (!liff.isLoggedIn()) {
+          const redirectUri = getCleanCurrentUrl();
+          localStorage.setItem(POST_LOGIN_REDIRECT_KEY, redirectUri);
+          liff.login({ redirectUri: redirectUri });
+          return;
+        }
+        if (redirectToStoredPageIfNeeded()) return;
         const profile = await liff.getProfile();
         const savedName = localStorage.getItem(USER_NAME_STORAGE_KEY) || localStorage.getItem('shippingUserName');
         document.getElementById('userName').value = savedName || profile.displayName;
