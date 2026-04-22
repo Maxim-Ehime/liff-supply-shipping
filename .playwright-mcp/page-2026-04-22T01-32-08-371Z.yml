@@ -1,0 +1,23 @@
+- main [ref=e5]:
+  - generic [ref=e6]:
+    - generic [ref=e8]:
+      - heading "LINE" [level=1] [ref=e10]
+      - generic [ref=e11]:
+        - heading "alert 400 Bad Request" [level=2] [ref=e12]:
+          - generic [ref=e13]: alert
+          - generic [ref=e14]: 400 Bad Request
+        - paragraph [ref=e15]: Bad Request.
+        - paragraph [ref=e16]
+    - generic [ref=e18]:
+      - generic [ref=e20]: © LY Corporation
+      - heading "LINEヤフー株式会社のリンク" [level=5] [ref=e21]
+      - list [ref=e23]:
+        - listitem [ref=e24]:
+          - link "LINEについて" [ref=e25] [cursor=pointer]:
+            - /url: https://line.me/
+        - listitem [ref=e26]:
+          - link "プライバシーポリシー" [ref=e27] [cursor=pointer]:
+            - /url: https://terms.line.me/line_rules/?lang=ja
+        - listitem [ref=e28]:
+          - link "利用規約" [ref=e29] [cursor=pointer]:
+            - /url: https://terms.line.me/line_terms/?lang=ja

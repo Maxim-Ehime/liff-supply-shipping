@@ -42,6 +42,27 @@
       outline: none;
     }
 
+    .required-badge {
+      background: #ff4d4f;
+      color: white;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      margin-left: 8px;
+      vertical-align: middle;
+    }
+
+    input[type="date"] {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      box-sizing: border-box;
+      font-size: 16px;
+      outline: none;
+      background: white;
+    }
+
     .free-text {
       width: 100%;
       min-height: 96px;
@@ -242,6 +263,11 @@
     <input type="text" id="userName" class="user-name" placeholder="氏名を入力">
   </div>
 
+  <div class="form-group">
+    <label>希望着日<span class="required-badge">必須</span></label>
+    <input type="date" id="arrivalDate">
+  </div>
+
   <div class="tab-container">
     <div id="tab1" class="tab-item active" onclick="switchTab(1)">通常備品</div>
     <div id="tab2" class="tab-item" onclick="switchTab(2)">店舗備品</div>
@@ -391,7 +417,13 @@
       const btn = document.querySelector('.submit-btn');
       try {
         const order = [];
+        const arrivalDate = document.getElementById('arrivalDate').value;
         const freeNote = document.getElementById('freeNote').value.trim();
+
+        if (!arrivalDate) {
+          alert("「希望着日」を選択してください。");
+          return;
+        }
 
         [...supplyList1, ...supplyList2].forEach(name => {
           const qty = parseInt(document.getElementById(name).value);
@@ -413,7 +445,7 @@
           headers: { "Content-Type": "text/plain;charset=utf-8" },
           body: JSON.stringify({
             action: "liff_order",
-            data: { userName: userName, items: order, freeNote: freeNote }
+            data: { userName: userName, arrivalDate: arrivalDate, items: order, freeNote: freeNote }
           })
         });
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
@@ -430,6 +462,7 @@
         document.getElementById('loading').style.display = 'none';
       }
     }
+    
   </script>
 </body>
 

@@ -1,0 +1,44 @@
+- generic [active] [ref=e1]:
+  - heading "🚚 送り依頼フォーム" [level=3] [ref=e2]
+  - generic [ref=e3]:
+    - generic [ref=e4]: 依頼者
+    - textbox "氏名を入力" [ref=e5]
+  - generic [ref=e6]:
+    - generic [ref=e7]: 運送会社
+    - combobox [ref=e8]:
+      - option [selected]
+      - option "クロネコヤマト"
+      - option "佐川急便"
+      - option "西濃運輸"
+      - option "福山通運"
+  - generic [ref=e9]:
+    - generic [ref=e10]: 希望着日必須
+    - textbox [ref=e11]
+  - generic [ref=e12]:
+    - generic [ref=e13]: 送り先必須
+    - textbox "店舗名や納品先を入力" [ref=e14]
+  - generic [ref=e15]:
+    - generic [ref=e16]: 最低カートン
+    - generic [ref=e17]:
+      - button "−" [ref=e18] [cursor=pointer]
+      - spinbutton: "0"
+      - button "＋" [ref=e19] [cursor=pointer]
+  - generic [ref=e20]:
+    - generic [ref=e21]: 最高カートン
+    - generic [ref=e22]:
+      - button "−" [ref=e23] [cursor=pointer]
+      - spinbutton: "0"
+      - button "＋" [ref=e24] [cursor=pointer]
+  - generic [ref=e25]:
+    - generic [ref=e26]: 備品注文の有無
+    - generic [ref=e27]:
+      - generic [ref=e28] [cursor=pointer]: 無し
+      - generic [ref=e29] [cursor=pointer]: 有り
+  - generic [ref=e30]:
+    - generic [ref=e31]: 残からの有無
+    - generic [ref=e32]:
+      - generic [ref=e33] [cursor=pointer]: 無し
+      - generic [ref=e34] [cursor=pointer]: 有り
+  - button "依頼を送信する" [ref=e35] [cursor=pointer]
+  - iframe [ref=e37]:
+    - alert [ref=f2e1]

@@ -1,0 +1,130 @@
+- generic [active] [ref=e1]:
+  - heading "📦 備品注文フォーム" [level=3] [ref=e2]
+  - generic [ref=e3]:
+    - generic [ref=e4]: 依頼者
+    - textbox "氏名を入力" [ref=e5]
+  - generic [ref=e6]:
+    - generic [ref=e7] [cursor=pointer]: 通常備品
+    - generic [ref=e8] [cursor=pointer]: 店舗備品
+  - button "🔍 備品一覧画像を確認する" [ref=e9] [cursor=pointer]
+  - generic [ref=e10]:
+    - generic [ref=e11]:
+      - generic [ref=e12]: 1.セロテープ(大)
+      - generic [ref=e13]:
+        - button "−" [ref=e14] [cursor=pointer]
+        - spinbutton [ref=e15]: "0"
+        - button "＋" [ref=e16] [cursor=pointer]
+    - generic [ref=e17]:
+      - generic [ref=e18]: 2.セロテープ(ミニ)
+      - generic [ref=e19]:
+        - button "−" [ref=e20] [cursor=pointer]
+        - spinbutton [ref=e21]: "0"
+        - button "＋" [ref=e22] [cursor=pointer]
+    - generic [ref=e23]:
+      - generic [ref=e24]: 3.ガムテープ
+      - generic [ref=e25]:
+        - button "−" [ref=e26] [cursor=pointer]
+        - spinbutton [ref=e27]: "0"
+        - button "＋" [ref=e28] [cursor=pointer]
+    - generic [ref=e29]:
+      - generic [ref=e30]: 4.雑巾
+      - generic [ref=e31]:
+        - button "−" [ref=e32] [cursor=pointer]
+        - spinbutton [ref=e33]: "0"
+        - button "＋" [ref=e34] [cursor=pointer]
+    - generic [ref=e35]:
+      - generic [ref=e36]: 5.アルコール
+      - generic [ref=e37]:
+        - button "−" [ref=e38] [cursor=pointer]
+        - spinbutton [ref=e39]: "0"
+        - button "＋" [ref=e40] [cursor=pointer]
+    - generic [ref=e41]:
+      - generic [ref=e42]: 6.ユニット/カプステ(400円機)
+      - generic [ref=e43]:
+        - button "−" [ref=e44] [cursor=pointer]
+        - spinbutton [ref=e45]: "0"
+        - button "＋" [ref=e46] [cursor=pointer]
+    - generic [ref=e47]:
+      - generic [ref=e48]: 7.ユニット/カプステ(500円機)
+      - generic [ref=e49]:
+        - button "−" [ref=e50] [cursor=pointer]
+        - spinbutton [ref=e51]: "0"
+        - button "＋" [ref=e52] [cursor=pointer]
+    - generic [ref=e53]:
+      - generic [ref=e54]: 8.ユニット/ガシャステ
+      - generic [ref=e55]:
+        - button "−" [ref=e56] [cursor=pointer]
+        - spinbutton [ref=e57]: "0"
+        - button "＋" [ref=e58] [cursor=pointer]
+    - generic [ref=e59]:
+      - generic [ref=e60]: 9.金属セレクター
+      - generic [ref=e61]:
+        - button "−" [ref=e62] [cursor=pointer]
+        - spinbutton [ref=e63]: "0"
+        - button "＋" [ref=e64] [cursor=pointer]
+    - generic [ref=e65]:
+      - generic [ref=e66]: 10.プラセレクター
+      - generic [ref=e67]:
+        - button "−" [ref=e68] [cursor=pointer]
+        - spinbutton [ref=e69]: "0"
+        - button "＋" [ref=e70] [cursor=pointer]
+    - generic [ref=e71]:
+      - generic [ref=e72]: 11.高額ユニット(プレミアム専用)
+      - generic [ref=e73]:
+        - button "−" [ref=e74] [cursor=pointer]
+        - spinbutton [ref=e75]: "0"
+        - button "＋" [ref=e76] [cursor=pointer]
+    - generic [ref=e77]:
+      - generic [ref=e78]: 12.精算書(青伝)
+      - generic [ref=e79]:
+        - button "−" [ref=e80] [cursor=pointer]
+        - spinbutton [ref=e81]: "0"
+        - button "＋" [ref=e82] [cursor=pointer]
+    - generic [ref=e83]:
+      - generic [ref=e84]: 13.精算書(横伝 ゆめタウン)
+      - generic [ref=e85]:
+        - button "−" [ref=e86] [cursor=pointer]
+        - spinbutton [ref=e87]: "0"
+        - button "＋" [ref=e88] [cursor=pointer]
+    - generic [ref=e89]:
+      - generic [ref=e90]: 14.精算書(横伝 ツタヤ)
+      - generic [ref=e91]:
+        - button "−" [ref=e92] [cursor=pointer]
+        - spinbutton [ref=e93]: "0"
+        - button "＋" [ref=e94] [cursor=pointer]
+    - generic [ref=e95]:
+      - generic [ref=e96]: 15.調整中POP
+      - generic [ref=e97]:
+        - button "−" [ref=e98] [cursor=pointer]
+        - spinbutton [ref=e99]: "0"
+        - button "＋" [ref=e100] [cursor=pointer]
+    - generic [ref=e101]:
+      - generic [ref=e102]: 16.返送メモ
+      - generic [ref=e103]:
+        - button "−" [ref=e104] [cursor=pointer]
+        - spinbutton [ref=e105]: "0"
+        - button "＋" [ref=e106] [cursor=pointer]
+    - generic [ref=e107]:
+      - generic [ref=e108]: 17.福通伝票(親伝)
+      - generic [ref=e109]:
+        - button "−" [ref=e110] [cursor=pointer]
+        - spinbutton [ref=e111]: "0"
+        - button "＋" [ref=e112] [cursor=pointer]
+    - generic [ref=e113]:
+      - generic [ref=e114]: 18.福通伝票(孫伝)
+      - generic [ref=e115]:
+        - button "−" [ref=e116] [cursor=pointer]
+        - spinbutton [ref=e117]: "0"
+        - button "＋" [ref=e118] [cursor=pointer]
+    - generic [ref=e119]:
+      - generic [ref=e120]: 19.集金袋
+      - generic [ref=e121]:
+        - button "−" [ref=e122] [cursor=pointer]
+        - spinbutton [ref=e123]: "0"
+        - button "＋" [ref=e124] [cursor=pointer]
+  - generic [ref=e125]:
+    - generic [ref=e126]: 自由記入
+    - textbox "補足事項があれば入力してください" [ref=e127]
+  - button "注文を確定して閉じる" [ref=e129] [cursor=pointer]
+  - iframe [ref=e131]:
+    - alert [ref=f1e1]

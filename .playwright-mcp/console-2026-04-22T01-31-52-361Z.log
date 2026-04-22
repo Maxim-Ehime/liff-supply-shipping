@@ -1,0 +1,4 @@
+[    1367ms] [WARNING] [WARN] liff.init() was called with a current URL that is not related to the endpoint URL.
+https://deploy-preview-1--fascinating-pothos-0bd74d.netlify.app/order_form.html is not under https://test--fascinating-pothos-0bd74d.netlify.app/ @ https://static.line-scdn.net/liff/edge/2/sdk.js:0
+[    1522ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://deploy-preview-1--fascinating-pothos-0bd74d.netlify.app/favicon.ico:0
+[    1979ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://access.line.me/oauth2/v2.1/error400?error=Bad%20Request&error_description=invalid%20url.%20channelId%3D2009819015%2C%20redirectUriString%3Dhttps%3A%2F%2Fdeploy-preview-1--fascinating-pothos-0bd74d.netlify.app%2Forder_form.html:0

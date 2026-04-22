@@ -1,0 +1,8 @@
+[     306ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://api.line.me/liff/v2/apps/2009819015-Pj5rk2Ruo/contextToken:0
+[     307ms] [ERROR] LIFF初期化失敗 Error: LIFF app '2009819015-Pj5rk2Ruo' was not found.
+    at new t (https://static.line-scdn.net/liff/edge/2/sdk.js:1:20408)
+    at Ce (https://static.line-scdn.net/liff/edge/2/sdk.js:1:20514)
+    at https://static.line-scdn.net/liff/edge/2/sdk.js:1:43475
+    at https://static.line-scdn.net/liff/edge/2/sdk.js:1:13359
+    at Object.next (https://static.line-scdn.net/liff/edge/2/sdk.js:1:13464)
+    at a (https://static.line-scdn.net/liff/edge/2/sdk.js:1:12206) @ https://deploy-preview-1--fascinating-pothos-0bd74d.netlify.app/:316
