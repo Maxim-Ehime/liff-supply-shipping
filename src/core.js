@@ -112,6 +112,7 @@ function normalizeShippingPayload_(rawData) {
 function normalizeOrderPayload_(rawData) {
   const data = ensureObject_(rawData, 'data');
   const userName = toOptionalString_(data.userName, '未入力');
+  const arrivalDate = toRequiredString_(data.arrivalDate, 'arrivalDate');
   const freeNote = toOptionalString_(data.freeNote, '');
   if (!Array.isArray(data.items)) {
     throw new Error('items must be an array.');
@@ -133,6 +134,7 @@ function normalizeOrderPayload_(rawData) {
 
   return {
     userName: userName,
+    arrivalDate: arrivalDate,
     items: items,
     freeNote: freeNote
   };
@@ -157,6 +159,7 @@ function toSupplyOrderRow_(orderData) {
   return [
     new Date(),
     orderData.userName,
+    orderData.arrivalDate,
     formatOrderItemsForSheet_(orderData.items),
     orderData.freeNote,
     false
@@ -211,6 +214,7 @@ function buildOrderNotificationText_(orderData) {
   return [
     '📦️備品注文が届きました！',
     '依頼者: ' + orderData.userName,
+    '希望着日: ' + orderData.arrivalDate,
     '注文内容:',
     orderItemsText,
     '自由記入: ' + freeNoteText
