@@ -214,7 +214,7 @@ function buildOrderNotificationText_(orderData) {
   return [
     '📦️備品注文が届きました！',
     '依頼者: ' + orderData.userName,
-    '指定着日: ' + orderData.arrivalDate,
+    '希望着日: ' + orderData.arrivalDate,
     '注文内容:',
     orderItemsText,
     '自由記入: ' + freeNoteText
