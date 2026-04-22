@@ -1,0 +1,27 @@
+[build]
+  publish = "."
+  functions = "netlify/functions"
+
+[context.production]
+  [context.production.environment]
+    APP_ENV = "production"
+
+[context.deploy-preview]
+  [context.deploy-preview.environment]
+    APP_ENV = "deploy-preview"
+
+[context.branch-deploy]
+  [context.branch-deploy.environment]
+    APP_ENV = "branch-deploy"
+
+[[redirects]]
+  from = "/api/gas"
+  to = "/.netlify/functions/gas-proxy"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/env.js"
+  to = "/.netlify/functions/env-js"
+  status = 200
+  force = true

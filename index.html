@@ -262,11 +262,13 @@
 
   <button class="submit-btn" onclick="submitShipping()">依頼を送信する</button>
 
+  <script src="/env.js"></script>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script>
 
-    const GAS_URL = "https://script.google.com/macros/s/AKfycbz6M7Gi704Vc3qlMQ7GD4Hh8mq0rf4I8QH-kqT7oOs1T8jkYJB6JQFQmMS3IhGD31VE/exec";
-    const LIFF_ID = "2009669107-iTCKuJvo";
+    const APP_CONFIG = window.APP_CONFIG || {};
+    const GAS_URL = APP_CONFIG.GAS_PROXY_URL || "/api/gas";
+    const LIFF_ID = APP_CONFIG.LIFF_ID || "";
     const USER_NAME_STORAGE_KEY = "requestUserName";
 
     function changeStepperQty(id, delta) {
@@ -278,6 +280,9 @@
 
     async function init() {
       try {
+        if (!LIFF_ID) {
+          throw new Error("Missing LIFF_ID in APP_CONFIG.");
+        }
         await liff.init({ liffId: LIFF_ID });
         if (!liff.isLoggedIn()) { liff.login(); return; }
         const profile = await liff.getProfile();
