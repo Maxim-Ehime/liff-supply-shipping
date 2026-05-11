@@ -102,6 +102,10 @@ function normalizeShippingPayload_(rawData) {
     hasRemaining: toOptionalString_(data.hasRemaining, '無')
   };
 
+  if (normalized.minCt > normalized.maxCt) {
+    throw new Error('minCt must be less than or equal to maxCt.');
+  }
+
   return normalized;
 }
 

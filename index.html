@@ -270,10 +270,25 @@
     const USER_NAME_STORAGE_KEY = "requestUserName";
 
     function changeStepperQty(id, delta) {
-      const input = document.getElementById(id);
-      let val = parseInt(input.value) + delta;
-      if (val < 0) val = 0;
-      input.value = val;
+      const minInput = document.getElementById('minCt');
+      const maxInput = document.getElementById('maxCt');
+      const currentInput = document.getElementById(id);
+
+      let value = parseInt(currentInput.value, 10);
+      if (!Number.isFinite(value)) value = 0;
+      value += delta;
+      if (value < 0) value = 0;
+
+      if (id === 'minCt') {
+        const maxValue = parseInt(maxInput.value, 10) || 0;
+        if (value > maxValue) value = maxValue;
+        minInput.value = value;
+        return;
+      }
+
+      const minValue = parseInt(minInput.value, 10) || 0;
+      if (value < minValue) value = minValue;
+      maxInput.value = value;
     }
 
     async function init() {
@@ -294,19 +309,22 @@
       const hasSupplies = document.querySelector('input[name="hasSupplies"]:checked').value;
       const hasRemaining = document.querySelector('input[name="hasRemaining"]:checked').value;
       const carrier = document.getElementById('carrier').value || '未選択';
+      const minCt = Number(document.getElementById('minCt').value);
+      const maxCt = Number(document.getElementById('maxCt').value);
 
       const data = {
         userName: document.getElementById('userName').value,
         carrier: carrier,
         arrivalDate: document.getElementById('arrivalDate').value,
         destination: document.getElementById('destination').value || "未入力",
-        minCt: document.getElementById('minCt').value,
-        maxCt: document.getElementById('maxCt').value,
+        minCt: minCt,
+        maxCt: maxCt,
         hasSupplies: hasSupplies,
         hasRemaining: hasRemaining
       };
 
       if (!data.arrivalDate) { alert("「希望着日」を選択してください。"); return; }
+      if (data.minCt > data.maxCt) { alert("「最低カートン」は「最高カートン」以下にしてください。"); return; }
 
       btn.disabled = true;
       document.getElementById('loading').style.display = 'flex';
