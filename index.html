@@ -270,25 +270,12 @@
     const USER_NAME_STORAGE_KEY = "requestUserName";
 
     function changeStepperQty(id, delta) {
-      const minInput = document.getElementById('minCt');
-      const maxInput = document.getElementById('maxCt');
-      const currentInput = document.getElementById(id);
-
-      let value = parseInt(currentInput.value, 10);
+      const input = document.getElementById(id);
+      let value = parseInt(input.value, 10);
       if (!Number.isFinite(value)) value = 0;
       value += delta;
       if (value < 0) value = 0;
-
-      if (id === 'minCt') {
-        const maxValue = parseInt(maxInput.value, 10) || 0;
-        if (value > maxValue) value = maxValue;
-        minInput.value = value;
-        return;
-      }
-
-      const minValue = parseInt(minInput.value, 10) || 0;
-      if (value < minValue) value = minValue;
-      maxInput.value = value;
+      input.value = value;
     }
 
     async function init() {
