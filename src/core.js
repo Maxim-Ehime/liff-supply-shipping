@@ -169,7 +169,7 @@ function setupDashboardLayout_(sheet) {
   sheet.clear();
   sheet.setHiddenGridlines(true);
 
-  sheet.getRange('A1').setValue('日次確認ダッシュボード');
+  sheet.getRange('A1').setValue('ダッシュボード');
   sheet.getRange('A3').setValue('確認する希望着日');
   sheet.getRange('A4').setValue('表示対象');
   sheet.getRange('D3').setValue('対象日件数');
