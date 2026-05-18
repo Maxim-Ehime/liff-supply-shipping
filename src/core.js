@@ -664,7 +664,8 @@ function toShippingRow_(shippingData) {
     shippingData.minCt,
     shippingData.maxCt,
     shippingData.hasSupplies,
-    shippingData.hasRemaining
+    shippingData.hasRemaining,
+    false
   ];
 }
 
@@ -676,7 +677,8 @@ function toSupplyOrderRow_(orderData) {
     orderData.userName,
     orderData.arrivalDate,
     formatOrderItemsForSheet_(orderData.items),
-    orderData.freeNote
+    orderData.freeNote,
+    false
   ];
 }
 
