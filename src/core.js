@@ -43,6 +43,10 @@ const DASHBOARD_TITLE_COLOR = '#12355B';
 const DASHBOARD_HEADER_COLOR = '#1F4E79';
 const DASHBOARD_LABEL_COLOR = '#E8EEF7';
 const DASHBOARD_SUMMARY_COLOR = '#F7F7F7';
+const SHIPPING_DONE_COLUMN = 12;
+const SUPPLY_DONE_COLUMN = 8;
+const HISTORY_DEFAULT_LIMIT = 50;
+const HISTORY_MAX_LIMIT = 100;
 
 function setupDashboard() {
   const config = getAppConfig_();
@@ -96,7 +100,7 @@ function syncDashboardDoneToSource(e) {
   }
 
   const sourceSheet = getRequiredSheetByName_(sourceSheetName);
-  const doneColumn = sourceSheetName === DASHBOARD_SOURCE_SHIPPING ? 10 : 6;
+  const doneColumn = sourceSheetName === DASHBOARD_SOURCE_SHIPPING ? SHIPPING_DONE_COLUMN : SUPPLY_DONE_COLUMN;
   const done = toDoneBoolean_(e.range.getValue());
   sourceSheet.getRange(sourceRow, doneColumn).setValue(done);
   refreshDashboard();
@@ -280,21 +284,24 @@ function readShippingRows_(sheetName) {
   if (lastRow < 2) {
     return [];
   }
-  const values = sheet.getRange(2, 1, lastRow - 1, 10).getValues();
+  const values = sheet.getRange(2, 1, lastRow - 1, SHIPPING_DONE_COLUMN).getValues();
   return values.map(function (row, index) {
+    const doneValue = row[11] !== '' ? row[11] : row[9];
     return {
       sourceType: DASHBOARD_SOURCE_SHIPPING,
-      timestamp: row[0],
-      requester: row[1],
-      carrier: row[2],
-      arrivalDate: row[3],
-      summary: row[4],
-      minCt: row[5],
-      maxCt: row[6],
-      hasSupplies: row[7],
-      hasRemaining: row[8],
+      requestId: row[0],
+      timestamp: row[1],
+      userId: row[2],
+      requester: row[3],
+      carrier: row[4],
+      arrivalDate: row[5],
+      summary: row[6],
+      minCt: row[7],
+      maxCt: row[8],
+      hasSupplies: row[9],
+      hasRemaining: row[10],
       freeNote: '',
-      done: row[9],
+      done: doneValue,
       sourceSheetName: sheetName,
       sourceRow: index + 2
     };
@@ -307,21 +314,24 @@ function readSupplyRows_(sheetName) {
   if (lastRow < 2) {
     return [];
   }
-  const values = sheet.getRange(2, 1, lastRow - 1, 6).getValues();
+  const values = sheet.getRange(2, 1, lastRow - 1, SUPPLY_DONE_COLUMN).getValues();
   return values.map(function (row, index) {
+    const doneValue = row[7] !== '' ? row[7] : row[5];
     return {
       sourceType: DASHBOARD_SOURCE_SUPPLY,
-      timestamp: row[0],
-      requester: row[1],
+      requestId: row[0],
+      timestamp: row[1],
+      userId: row[2],
+      requester: row[3],
       carrier: '',
-      arrivalDate: row[2],
-      summary: row[3],
+      arrivalDate: row[4],
+      summary: row[5],
       minCt: '',
       maxCt: '',
       hasSupplies: '',
       hasRemaining: '',
-      freeNote: row[4],
-      done: row[5],
+      freeNote: row[6],
+      done: doneValue,
       sourceSheetName: sheetName,
       sourceRow: index + 2
     };
@@ -591,6 +601,7 @@ function pushLineTextMessage_(config, messageText) {
 function normalizeShippingPayload_(rawData) {
   const data = ensureObject_(rawData, 'data');
   const normalized = {
+    userId: toOptionalString_(data.userId, ''),
     userName: toOptionalString_(data.userName, '未入力'),
     carrier: toOptionalString_(data.carrier, '未選択'),
     arrivalDate: toRequiredString_(data.arrivalDate, 'arrivalDate'),
@@ -610,6 +621,7 @@ function normalizeShippingPayload_(rawData) {
 
 function normalizeOrderPayload_(rawData) {
   const data = ensureObject_(rawData, 'data');
+  const userId = toOptionalString_(data.userId, '');
   const userName = toOptionalString_(data.userName, '未入力');
   const arrivalDate = toRequiredString_(data.arrivalDate, 'arrivalDate');
   const freeNote = toOptionalString_(data.freeNote, '');
@@ -632,6 +644,7 @@ function normalizeOrderPayload_(rawData) {
   }
 
   return {
+    userId: userId,
     userName: userName,
     arrivalDate: arrivalDate,
     items: items,
@@ -641,7 +654,9 @@ function normalizeOrderPayload_(rawData) {
 
 function toShippingRow_(shippingData) {
   return [
+    createRequestId_('SHIP'),
     new Date(),
+    shippingData.userId,
     shippingData.userName,
     shippingData.carrier,
     shippingData.arrivalDate,
@@ -649,20 +664,127 @@ function toShippingRow_(shippingData) {
     shippingData.minCt,
     shippingData.maxCt,
     shippingData.hasSupplies,
-    shippingData.hasRemaining,
-    false
+    shippingData.hasRemaining
   ];
 }
 
 function toSupplyOrderRow_(orderData) {
   return [
+    createRequestId_('SUP'),
     new Date(),
+    orderData.userId,
     orderData.userName,
     orderData.arrivalDate,
     formatOrderItemsForSheet_(orderData.items),
-    orderData.freeNote,
-    false
+    orderData.freeNote
   ];
+}
+
+function createRequestId_(prefix) {
+  const timestamp = Utilities.formatDate(new Date(), getSpreadsheetTimeZone_(), 'yyyyMMdd-HHmmss');
+  const randomPart = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
+  return prefix + '-' + timestamp + '-' + randomPart;
+}
+
+function normalizeHistoryRequest_(rawData) {
+  const data = ensureObject_(rawData, 'data');
+  const status = normalizeHistoryStatus_(data.status);
+  return {
+    userId: toRequiredString_(data.userId, 'userId'),
+    status: status,
+    limit: toHistoryLimit_(data.limit)
+  };
+}
+
+function toHistoryLimit_(value) {
+  if (value === undefined || value === null || value === '') {
+    return HISTORY_DEFAULT_LIMIT;
+  }
+  const limit = Number(value);
+  if (!Number.isFinite(limit) || Math.floor(limit) !== limit || limit <= 0) {
+    throw new Error('limit must be a positive integer.');
+  }
+  return Math.min(limit, HISTORY_MAX_LIMIT);
+}
+
+function normalizeHistoryStatus_(value) {
+  const status = normalizeTextKey_(value).toLowerCase();
+  if (status === 'pending' || status === 'done') {
+    return status;
+  }
+  return 'all';
+}
+
+function getHistoryItems_(requestData, config) {
+  const shippingItems = readShippingRows_(config.masterSheetName).map(function (row) {
+    return {
+      requestId: toOptionalString_(row.requestId, ''),
+      userId: toOptionalString_(row.userId, ''),
+      type: DASHBOARD_SOURCE_SHIPPING,
+      requestedAt: row.timestamp,
+      arrivalDate: row.arrivalDate,
+      summary: row.summary,
+      detailText: [
+        toOptionalString_(row.carrier, '未選択'),
+        toOptionalString_(row.minCt, '') + '-' + toOptionalString_(row.maxCt, '') + 'CT',
+        '備品注文: ' + toOptionalString_(row.hasSupplies, '無'),
+        '残から: ' + toOptionalString_(row.hasRemaining, '無')
+      ].join(' / '),
+      done: toDoneBoolean_(row.done)
+    };
+  });
+  const supplyItems = readSupplyRows_(config.supplySheetName).map(function (row) {
+    return {
+      requestId: toOptionalString_(row.requestId, ''),
+      userId: toOptionalString_(row.userId, ''),
+      type: DASHBOARD_SOURCE_SUPPLY,
+      requestedAt: row.timestamp,
+      arrivalDate: row.arrivalDate,
+      summary: row.summary,
+      detailText: '自由記入: ' + toOptionalString_(row.freeNote, '（なし）'),
+      done: toDoneBoolean_(row.done)
+    };
+  });
+
+  return shippingItems.concat(supplyItems)
+    .filter(function (item) {
+      return item.userId && item.userId === requestData.userId;
+    })
+    .filter(function (item) {
+      if (requestData.status === 'pending') {
+        return !item.done;
+      }
+      if (requestData.status === 'done') {
+        return item.done;
+      }
+      return true;
+    })
+    .sort(function (left, right) {
+      return toComparableTime_(right.requestedAt) - toComparableTime_(left.requestedAt);
+    })
+    .slice(0, requestData.limit)
+    .map(function (item) {
+      return {
+        requestId: item.requestId,
+        type: item.type,
+        requestedAt: toIsoString_(item.requestedAt),
+        arrivalDate: normalizeDateKey_(item.arrivalDate),
+        summary: toOptionalString_(item.summary, ''),
+        detailText: item.detailText,
+        done: item.done
+      };
+    });
+}
+
+function toIsoString_(value) {
+  if (value instanceof Date && Number.isFinite(value.getTime())) {
+    return value.toISOString();
+  }
+  const parsed = new Date(value);
+  if (Number.isFinite(parsed.getTime())) {
+    return parsed.toISOString();
+  }
+  return '';
 }
 
 function formatOrderItemsForSheet_(items) {

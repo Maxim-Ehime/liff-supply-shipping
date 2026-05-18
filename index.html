@@ -185,6 +185,21 @@
       font-weight: bold;
       color: #007bff;
     }
+
+    .history-link-wrap {
+      margin-top: 14px;
+      text-align: center;
+    }
+
+    .history-link {
+      color: #007bff;
+      font-size: 14px;
+      text-decoration: underline;
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 0;
+    }
   </style>
 </head>
 
@@ -261,6 +276,9 @@
   </div>
 
   <button class="submit-btn" onclick="submitShipping()">依頼を送信する</button>
+  <div class="history-link-wrap">
+    <button class="history-link" onclick="openHistory()">履歴を見る</button>
+  </div>
 
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script>
@@ -268,6 +286,8 @@
     const GAS_URL = "https://script.google.com/macros/s/AKfycbz6M7Gi704Vc3qlMQ7GD4Hh8mq0rf4I8QH-kqT7oOs1T8jkYJB6JQFQmMS3IhGD31VE/exec";
     const LIFF_ID = "2009669107-iTCKuJvo";
     const USER_NAME_STORAGE_KEY = "requestUserName";
+    const HISTORY_URL = "./history.html";
+    let currentProfile = null;
 
     function changeStepperQty(id, delta) {
       const input = document.getElementById(id);
@@ -283,11 +303,24 @@
         await liff.init({ liffId: LIFF_ID });
         if (!liff.isLoggedIn()) { liff.login(); return; }
         const profile = await liff.getProfile();
+        currentProfile = profile;
         const savedName = localStorage.getItem(USER_NAME_STORAGE_KEY) || localStorage.getItem('shippingUserName');
         document.getElementById('userName').value = savedName || profile.displayName;
       } catch (err) {
         console.error("LIFF初期化失敗", err);
       }
+    }
+
+    async function getCurrentUserId() {
+      if (currentProfile && currentProfile.userId) {
+        return currentProfile.userId;
+      }
+      if (!liff.isLoggedIn()) {
+        liff.login();
+        return '';
+      }
+      currentProfile = await liff.getProfile();
+      return currentProfile.userId || '';
     }
 
     async function submitShipping() {
@@ -299,7 +332,9 @@
       const minCt = Number(document.getElementById('minCt').value);
       const maxCt = Number(document.getElementById('maxCt').value);
 
+      const userId = await getCurrentUserId();
       const data = {
+        userId: userId,
         userName: document.getElementById('userName').value,
         carrier: carrier,
         arrivalDate: document.getElementById('arrivalDate').value,
@@ -311,6 +346,7 @@
       };
 
       if (!data.arrivalDate) { alert("「希望着日」を選択してください。"); return; }
+      if (!data.userId) { alert("LINEユーザー情報の取得に失敗しました。画面を開き直してください。"); return; }
       if (data.minCt > data.maxCt) { alert("「最低カートン」は「最高カートン」以下にしてください。"); return; }
 
       btn.disabled = true;
@@ -337,6 +373,10 @@
         btn.disabled = false;
         document.getElementById('loading').style.display = 'none';
       }
+    }
+
+    function openHistory() {
+      window.location.href = HISTORY_URL;
     }
 
     init();

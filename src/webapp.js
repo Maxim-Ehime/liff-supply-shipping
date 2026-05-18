@@ -18,6 +18,16 @@ function doPost(e) {
       return createJsonResponse_({ ok: true, action: action });
     }
 
+    if (action === 'liff_history') {
+      const historyRequest = normalizeHistoryRequest_(request.data);
+      const items = getHistoryItems_(historyRequest, config);
+      return createJsonResponse_({
+        ok: true,
+        action: action,
+        items: items
+      });
+    }
+
     throw new Error('Unsupported action: ' + action);
   } catch (error) {
     return createJsonResponse_({

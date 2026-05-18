@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>依頼履歴</title>
+  <style>
+    body {
+      font-family: -apple-system, "Helvetica Neue", sans-serif;
+      margin: 0;
+      padding: 16px;
+      background: #f4f7f9;
+      color: #222;
+    }
+
+    h3 {
+      margin: 4px 0 16px;
+      text-align: center;
+      color: #0B5ED7;
+    }
+
+    .filter-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .filter-btn {
+      flex: 1;
+      border: 1px solid #C8D3E0;
+      background: #fff;
+      color: #0B5ED7;
+      border-radius: 8px;
+      padding: 10px 0;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .filter-btn.active {
+      background: #0B5ED7;
+      color: #fff;
+      border-color: #0B5ED7;
+    }
+
+    #loading {
+      display: none;
+      text-align: center;
+      color: #0B5ED7;
+      font-weight: 700;
+      margin: 28px 0;
+    }
+
+    #empty {
+      display: none;
+      text-align: center;
+      color: #5A667A;
+      margin: 28px 0;
+      font-weight: 600;
+    }
+
+    #error {
+      display: none;
+      text-align: center;
+      color: #B42318;
+      margin: 18px 0;
+    }
+
+    #retryBtn {
+      display: none;
+      margin: 0 auto 14px;
+      border: 1px solid #B42318;
+      background: #fff;
+      color: #B42318;
+      border-radius: 8px;
+      padding: 9px 14px;
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 10px;
+      box-shadow: 0 2px 6px rgba(8, 24, 48, 0.08);
+    }
+
+    .row-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .requested-at {
+      font-weight: 700;
+      color: #1E2A3A;
+      font-size: 14px;
+    }
+
+    .done-chip {
+      font-size: 12px;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .done-chip.pending {
+      background: #FFF4E5;
+      color: #B54708;
+    }
+
+    .done-chip.done {
+      background: #E8F5E9;
+      color: #1B5E20;
+    }
+
+    .type {
+      font-weight: 700;
+      color: #0B5ED7;
+      margin-bottom: 2px;
+      font-size: 14px;
+    }
+
+    .meta {
+      color: #475467;
+      margin-bottom: 4px;
+      font-size: 13px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
+
+    .request-id {
+      color: #667085;
+      font-size: 12px;
+      margin-top: 6px;
+      word-break: break-all;
+    }
+  </style>
+</head>
+
+<body>
+  <h3>依頼履歴</h3>
+  <div class="filter-row">
+    <button class="filter-btn active" data-status="all" onclick="changeStatus('all')">全件</button>
+    <button class="filter-btn" data-status="pending" onclick="changeStatus('pending')">未完了</button>
+    <button class="filter-btn" data-status="done" onclick="changeStatus('done')">完了</button>
+  </div>
+
+  <div id="loading">読み込み中...</div>
+  <div id="error"></div>
+  <button id="retryBtn" onclick="loadHistory()">再読み込み</button>
+  <div id="empty">依頼履歴はまだありません</div>
+  <div id="list"></div>
+
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script>
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbz6M7Gi704Vc3qlMQ7GD4Hh8mq0rf4I8QH-kqT7oOs1T8jkYJB6JQFQmMS3IhGD31VE/exec";
+    const LIFF_ID = "2009669107-iTCKuJvo";
+    const DEFAULT_LIMIT = 50;
+
+    let currentStatus = 'all';
+    let currentProfile = null;
+
+    function setLoading(visible) {
+      document.getElementById('loading').style.display = visible ? 'block' : 'none';
+    }
+
+    function setError(message) {
+      const errorEl = document.getElementById('error');
+      const retryBtn = document.getElementById('retryBtn');
+      if (message) {
+        errorEl.textContent = message;
+        errorEl.style.display = 'block';
+        retryBtn.style.display = 'block';
+      } else {
+        errorEl.textContent = '';
+        errorEl.style.display = 'none';
+        retryBtn.style.display = 'none';
+      }
+    }
+
+    function formatDateTime(isoText) {
+      if (!isoText) return '';
+      const date = new Date(isoText);
+      if (!Number.isFinite(date.getTime())) return '';
+      return new Intl.DateTimeFormat('ja-JP', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      }).format(date);
+    }
+
+    function renderHistory(items) {
+      const listEl = document.getElementById('list');
+      const emptyEl = document.getElementById('empty');
+      listEl.innerHTML = '';
+
+      if (!items || items.length === 0) {
+        emptyEl.style.display = 'block';
+        return;
+      }
+
+      emptyEl.style.display = 'none';
+      const html = items.map(item => {
+        const doneClass = item.done ? 'done' : 'pending';
+        const doneLabel = item.done ? '完了' : '未完了';
+        const requestedAt = formatDateTime(item.requestedAt);
+        const arrivalDate = item.arrivalDate || '未設定';
+        const summary = item.summary || '（内容なし）';
+        const detailText = item.detailText || '';
+        const requestId = item.requestId || '';
+        return `
+          <div class="card">
+            <div class="row-top">
+              <div class="requested-at">${requestedAt}</div>
+              <div class="done-chip ${doneClass}">${doneLabel}</div>
+            </div>
+            <div class="type">${item.type}</div>
+            <div class="meta">希望着日: ${arrivalDate}</div>
+            <div class="meta">${summary}</div>
+            <div class="meta">${detailText}</div>
+            <div class="request-id">依頼ID: ${requestId}</div>
+          </div>
+        `;
+      }).join('');
+
+      listEl.innerHTML = html;
+    }
+
+    function applyFilterButtonState() {
+      document.querySelectorAll('.filter-btn').forEach(function (button) {
+        if (button.dataset.status === currentStatus) {
+          button.classList.add('active');
+          return;
+        }
+        button.classList.remove('active');
+      });
+    }
+
+    async function loadHistory() {
+      if (!currentProfile || !currentProfile.userId) {
+        setError('LINEユーザー情報の取得に失敗しました。画面を開き直してください。');
+        return;
+      }
+      setLoading(true);
+      setError('');
+      document.getElementById('empty').style.display = 'none';
+      document.getElementById('list').innerHTML = '';
+
+      try {
+        const response = await fetch(GAS_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({
+            action: 'liff_history',
+            data: {
+              userId: currentProfile.userId,
+              status: currentStatus,
+              limit: DEFAULT_LIMIT
+            }
+          })
+        });
+        if (!response.ok) {
+          throw new Error('HTTP ' + response.status);
+        }
+        const payload = await response.json();
+        if (!payload.ok) {
+          throw new Error(payload.error || '履歴取得に失敗しました');
+        }
+        renderHistory(payload.items || []);
+      } catch (error) {
+        setError('履歴の取得に失敗しました: ' + error.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    function changeStatus(status) {
+      currentStatus = status;
+      applyFilterButtonState();
+      loadHistory();
+    }
+
+    async function init() {
+      setLoading(true);
+      try {
+        await liff.init({ liffId: LIFF_ID });
+        if (!liff.isLoggedIn()) {
+          liff.login();
+          return;
+        }
+        currentProfile = await liff.getProfile();
+        applyFilterButtonState();
+        await loadHistory();
+      } catch (error) {
+        setError('LIFFの初期化に失敗しました: ' + error.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    init();
+  </script>
+</body>
+
+</html>

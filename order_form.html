@@ -241,12 +241,30 @@
       align-items: center;
       font-weight: bold;
     }
+
+    .history-link-wrap {
+      text-align: center;
+      margin: 6px 0 12px;
+    }
+
+    .history-link {
+      color: #1DB446;
+      font-size: 14px;
+      text-decoration: underline;
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 0;
+    }
   </style>
 </head>
 
 <body>
   <div id="loading">処理中...</div>
   <h3>📦 備品注文フォーム</h3>
+  <div class="history-link-wrap">
+    <button class="history-link" onclick="openHistory()">履歴を見る</button>
+  </div>
   <div class="form-group">
     <label>依頼者</label>
     <input type="text" id="userName" class="user-name" placeholder="氏名を入力">
@@ -304,6 +322,8 @@
     const GAS_URL = "https://script.google.com/macros/s/AKfycbz6M7Gi704Vc3qlMQ7GD4Hh8mq0rf4I8QH-kqT7oOs1T8jkYJB6JQFQmMS3IhGD31VE/exec";
     const LIFF_ID = "2009669107-iTCKuJvo";
     const USER_NAME_STORAGE_KEY = "requestUserName";
+    const HISTORY_URL = "./history.html";
+    let currentProfile = null;
 
     let currentTab = 1;
 
@@ -359,11 +379,24 @@
         await liff.init({ liffId: LIFF_ID });
         if (!liff.isLoggedIn()) { liff.login(); return; }
         const profile = await liff.getProfile();
+        currentProfile = profile;
         const savedName = localStorage.getItem(USER_NAME_STORAGE_KEY) || localStorage.getItem('shippingUserName');
         document.getElementById('userName').value = savedName || profile.displayName;
       } catch (err) {
         console.error("LIFF初期化失敗", err);
       }
+    }
+
+    async function getCurrentUserId() {
+      if (currentProfile && currentProfile.userId) {
+        return currentProfile.userId;
+      }
+      if (!liff.isLoggedIn()) {
+        liff.login();
+        return '';
+      }
+      currentProfile = await liff.getProfile();
+      return currentProfile.userId || '';
     }
 
     window.onload = function () {
@@ -398,6 +431,10 @@
         document.getElementById('loading').style.display = 'flex';
 
         const userName = document.getElementById('userName').value;
+        const userId = await getCurrentUserId();
+        if (!userId) {
+          throw new Error('LINEユーザー情報の取得に失敗しました。画面を開き直してください。');
+        }
 
         const resp = await fetch(GAS_URL, {
           method: "POST",
@@ -405,6 +442,7 @@
           body: JSON.stringify({
             action: "liff_order",
             data: {
+              userId: userId,
               userName: userName,
               arrivalDate: arrivalDate,
               items: order,
@@ -425,6 +463,10 @@
         btn.disabled = false;
         document.getElementById('loading').style.display = 'none';
       }
+    }
+
+    function openHistory() {
+      window.location.href = HISTORY_URL;
     }
   </script>
 </body>
