@@ -1,0 +1,9 @@
+.git/**
+.github/**
+img/**
+node_modules/**
+outputs/**
+.env
+.gitignore
+package.json
+package-lock.json
