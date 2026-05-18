@@ -63,6 +63,15 @@ function getRequiredSheetByName_(sheetName) {
 }
 
 function pushLineTextMessage_(config, messageText) {
+  pushLineTextMessageTo_(config, config.targetUserId, messageText);
+}
+
+function pushLineTextMessageTo_(config, toUserId, messageText) {
+  const recipient = toOptionalString_(toUserId, '');
+  if (!recipient) {
+    throw new Error('LINE recipient userId is missing.');
+  }
+
   const response = UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', {
     method: 'post',
     contentType: 'application/json',
@@ -70,7 +79,7 @@ function pushLineTextMessage_(config, messageText) {
       Authorization: 'Bearer ' + config.lineToken
     },
     payload: JSON.stringify({
-      to: config.targetUserId,
+      to: recipient,
       messages: [
         {
           type: 'text',
@@ -99,7 +108,8 @@ function normalizeShippingPayload_(rawData) {
     minCt: toNonNegativeInteger_(data.minCt, 'minCt'),
     maxCt: toNonNegativeInteger_(data.maxCt, 'maxCt'),
     hasSupplies: toOptionalString_(data.hasSupplies, '無'),
-    hasRemaining: toOptionalString_(data.hasRemaining, '無')
+    hasRemaining: toOptionalString_(data.hasRemaining, '無'),
+    lineUserId: toOptionalString_(data.lineUserId, '')
   };
 
   if (normalized.minCt > normalized.maxCt) {
@@ -114,6 +124,7 @@ function normalizeOrderPayload_(rawData) {
   const userName = toOptionalString_(data.userName, '未入力');
   const arrivalDate = toRequiredString_(data.arrivalDate, 'arrivalDate');
   const freeNote = toOptionalString_(data.freeNote, '');
+  const lineUserId = toOptionalString_(data.lineUserId, '');
   if (!Array.isArray(data.items)) {
     throw new Error('items must be an array.');
   }
@@ -136,7 +147,8 @@ function normalizeOrderPayload_(rawData) {
     userName: userName,
     arrivalDate: arrivalDate,
     items: items,
-    freeNote: freeNote
+    freeNote: freeNote,
+    lineUserId: lineUserId
   };
 }
 
@@ -214,6 +226,30 @@ function buildOrderNotificationText_(orderData) {
   return [
     '📦️備品注文が届きました！',
     '依頼者: ' + orderData.userName,
+    '希望着日: ' + orderData.arrivalDate,
+    '注文内容:',
+    orderItemsText,
+    '自由記入: ' + freeNoteText
+  ].join('\n');
+}
+
+function buildShippingReceiptText_(shippingData) {
+  return [
+    '送り依頼を受け付けました。',
+    '希望着日: ' + shippingData.arrivalDate,
+    '送り先: ' + shippingData.destination,
+    '最低カートン: ' + shippingData.minCt,
+    '最高カートン: ' + shippingData.maxCt
+  ].join('\n');
+}
+
+function buildOrderReceiptText_(orderData) {
+  const orderItemsText = orderData.items.length > 0
+    ? formatOrderItemsForNotification_(orderData.items)
+    : '（なし）';
+  const freeNoteText = orderData.freeNote || '（なし）';
+  return [
+    '備品注文を受け付けました。',
     '希望着日: ' + orderData.arrivalDate,
     '注文内容:',
     orderItemsText,

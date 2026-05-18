@@ -304,6 +304,7 @@
     const GAS_URL = "https://script.google.com/macros/s/AKfycbz6M7Gi704Vc3qlMQ7GD4Hh8mq0rf4I8QH-kqT7oOs1T8jkYJB6JQFQmMS3IhGD31VE/exec";
     const LIFF_ID = "2009669107-iTCKuJvo";
     const USER_NAME_STORAGE_KEY = "requestUserName";
+    let currentLineUserId = "";
 
     let currentTab = 1;
 
@@ -359,6 +360,7 @@
         await liff.init({ liffId: LIFF_ID });
         if (!liff.isLoggedIn()) { liff.login(); return; }
         const profile = await liff.getProfile();
+        currentLineUserId = profile.userId || "";
         const savedName = localStorage.getItem(USER_NAME_STORAGE_KEY) || localStorage.getItem('shippingUserName');
         document.getElementById('userName').value = savedName || profile.displayName;
       } catch (err) {
@@ -404,7 +406,13 @@
           headers: { "Content-Type": "text/plain;charset=utf-8" },
           body: JSON.stringify({
             action: "liff_order",
-            data: { userName: userName, arrivalDate: arrivalDate, items: order, freeNote: freeNote }
+            data: {
+              userName: userName,
+              arrivalDate: arrivalDate,
+              items: order,
+              freeNote: freeNote,
+              lineUserId: currentLineUserId
+            }
           })
         });
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
