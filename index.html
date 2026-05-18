@@ -268,7 +268,6 @@
     const GAS_URL = "https://script.google.com/macros/s/AKfycbz6M7Gi704Vc3qlMQ7GD4Hh8mq0rf4I8QH-kqT7oOs1T8jkYJB6JQFQmMS3IhGD31VE/exec";
     const LIFF_ID = "2009669107-iTCKuJvo";
     const USER_NAME_STORAGE_KEY = "requestUserName";
-    let currentLineUserId = "";
 
     function changeStepperQty(id, delta) {
       const input = document.getElementById(id);
@@ -284,7 +283,6 @@
         await liff.init({ liffId: LIFF_ID });
         if (!liff.isLoggedIn()) { liff.login(); return; }
         const profile = await liff.getProfile();
-        currentLineUserId = profile.userId || "";
         const savedName = localStorage.getItem(USER_NAME_STORAGE_KEY) || localStorage.getItem('shippingUserName');
         document.getElementById('userName').value = savedName || profile.displayName;
       } catch (err) {
@@ -309,8 +307,7 @@
         minCt: minCt,
         maxCt: maxCt,
         hasSupplies: hasSupplies,
-        hasRemaining: hasRemaining,
-        lineUserId: currentLineUserId
+        hasRemaining: hasRemaining
       };
 
       if (!data.arrivalDate) { alert("「希望着日」を選択してください。"); return; }

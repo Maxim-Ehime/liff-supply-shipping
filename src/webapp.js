@@ -8,13 +8,6 @@ function doPost(e) {
       const shippingData = normalizeShippingPayload_(request.data);
       appendShippingToSheet_(shippingData, config);
       pushLineTextMessage_(config, buildShippingNotificationText_(shippingData));
-      if (shippingData.lineUserId) {
-        try {
-          pushLineTextMessageTo_(config, shippingData.lineUserId, buildShippingReceiptText_(shippingData));
-        } catch (notifyError) {
-          console.error('Failed to notify shipping requester:', toErrorMessage_(notifyError));
-        }
-      }
       return createJsonResponse_({ ok: true, action: action });
     }
 
@@ -22,13 +15,6 @@ function doPost(e) {
       const orderData = normalizeOrderPayload_(request.data);
       appendSupplyOrderToSheet_(orderData, config);
       pushLineTextMessage_(config, buildOrderNotificationText_(orderData));
-      if (orderData.lineUserId) {
-        try {
-          pushLineTextMessageTo_(config, orderData.lineUserId, buildOrderReceiptText_(orderData));
-        } catch (notifyError) {
-          console.error('Failed to notify supply requester:', toErrorMessage_(notifyError));
-        }
-      }
       return createJsonResponse_({ ok: true, action: action });
     }
 
