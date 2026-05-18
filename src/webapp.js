@@ -41,6 +41,37 @@ function doPost(e) {
   }
 }
 
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('ダッシュボード')
+    .addItem('初期作成', 'setupDashboard')
+    .addItem('更新', 'refreshDashboard')
+    .addItem('依頼者順を補完', 'supplementRequesterOrder')
+    .addToUi();
+}
+
+function onEdit(e) {
+  if (!e || !e.range || !e.source) {
+    return;
+  }
+
+  const sheet = e.range.getSheet();
+  if (sheet.getName() !== DASHBOARD_SHEET_NAME) {
+    return;
+  }
+
+  const row = e.range.getRow();
+  const col = e.range.getColumn();
+  if ((row === 3 || row === 4) && col === 2) {
+    refreshDashboard();
+    return;
+  }
+
+  if (row >= DASHBOARD_DATA_START_ROW && col === DASHBOARD_DONE_COLUMN) {
+    syncDashboardDoneToSource(e);
+  }
+}
+
 function parseRequestBody_(e) {
   if (!e || !e.postData || !e.postData.contents) {
     throw new Error('Request body is empty.');

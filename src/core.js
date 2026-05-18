@@ -26,6 +26,114 @@ function appendSupplyOrderToSheet_(orderData, config) {
   insertRequestRow_(sheet, toSupplyOrderRow_(orderData));
 }
 
+const DASHBOARD_SHEET_NAME = 'ダッシュボード';
+const REQUESTER_ORDER_SHEET_NAME = '依頼者順';
+const DASHBOARD_HEADER_ROW = 8;
+const DASHBOARD_DATA_START_ROW = 9;
+const DASHBOARD_COLUMNS = 11;
+const DASHBOARD_META_START_COLUMN = 12;
+const DASHBOARD_META_COLUMNS = 2;
+const DASHBOARD_DONE_COLUMN = 11;
+const DASHBOARD_STATUS_ALL = '全件';
+const DASHBOARD_STATUS_PENDING = '未完了のみ';
+const DASHBOARD_STATUS_DONE = '完了のみ';
+const DASHBOARD_SOURCE_SHIPPING = '送り依頼';
+const DASHBOARD_SOURCE_SUPPLY = '備品注文';
+const DASHBOARD_TITLE_COLOR = '#12355B';
+const DASHBOARD_HEADER_COLOR = '#1F4E79';
+const DASHBOARD_LABEL_COLOR = '#E8EEF7';
+const DASHBOARD_SUMMARY_COLOR = '#F7F7F7';
+
+function setupDashboard() {
+  const config = getAppConfig_();
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  if (!spreadsheet) {
+    throw new Error('Active spreadsheet is not available. Use a bound script.');
+  }
+
+  const dashboardSheet = getOrCreateSheet_(spreadsheet, DASHBOARD_SHEET_NAME);
+  const requesterOrderSheet = getOrCreateSheet_(spreadsheet, REQUESTER_ORDER_SHEET_NAME);
+
+  setupDashboardLayout_(dashboardSheet);
+  ensureRequesterOrderSheet_(requesterOrderSheet);
+  supplementRequesterOrder();
+  refreshDashboard();
+}
+
+function refreshDashboard() {
+  const config = getAppConfig_();
+  const dashboardSheet = getRequiredSheetByName_(DASHBOARD_SHEET_NAME);
+  const targetDate = getDashboardTargetDate_(dashboardSheet);
+  const statusFilter = getDashboardStatusFilter_(dashboardSheet);
+  const requesterOrder = readRequesterOrder_();
+  const mergedRows = buildDashboardRows_(config, targetDate, statusFilter, requesterOrder.orderMap);
+
+  writeDashboardRows_(dashboardSheet, mergedRows.rows);
+  writeDashboardSummary_(dashboardSheet, mergedRows.summary);
+}
+
+function syncDashboardDoneToSource(e) {
+  if (!e || !e.range) {
+    return;
+  }
+
+  const dashboardSheet = e.range.getSheet();
+  const row = e.range.getRow();
+  const col = e.range.getColumn();
+  if (
+    dashboardSheet.getName() !== DASHBOARD_SHEET_NAME ||
+    row < DASHBOARD_DATA_START_ROW ||
+    col !== DASHBOARD_DONE_COLUMN
+  ) {
+    return;
+  }
+
+  const metaValues = dashboardSheet.getRange(row, DASHBOARD_META_START_COLUMN, 1, DASHBOARD_META_COLUMNS).getValues()[0];
+  const sourceSheetName = normalizeTextKey_(metaValues[0]);
+  const sourceRow = Number(metaValues[1]);
+  if (!sourceSheetName || !Number.isFinite(sourceRow) || sourceRow < 2) {
+    throw new Error('ダッシュボードの元行情報が見つかりません。更新メニューで再描画してください。');
+  }
+
+  const sourceSheet = getRequiredSheetByName_(sourceSheetName);
+  const doneColumn = sourceSheetName === DASHBOARD_SOURCE_SHIPPING ? 10 : 6;
+  const done = toDoneBoolean_(e.range.getValue());
+  sourceSheet.getRange(sourceRow, doneColumn).setValue(done);
+  refreshDashboard();
+}
+
+function supplementRequesterOrder() {
+  const config = getAppConfig_();
+  const orderSheet = getRequiredSheetByName_(REQUESTER_ORDER_SHEET_NAME);
+  const requesterOrder = readRequesterOrder_();
+  const known = requesterOrder.orderMap;
+
+  const shippingRows = readShippingRows_(config.masterSheetName);
+  const supplyRows = readSupplyRows_(config.supplySheetName);
+  const namesToAppend = [];
+
+  shippingRows.concat(supplyRows).forEach(function (row) {
+    const name = normalizeTextKey_(row.requester);
+    if (!name) {
+      return;
+    }
+    if (!known.hasOwnProperty(name)) {
+      known[name] = requesterOrder.names.length + namesToAppend.length + 1;
+      namesToAppend.push(name);
+    }
+  });
+
+  if (namesToAppend.length === 0) {
+    return;
+  }
+
+  const startRow = Math.max(orderSheet.getLastRow() + 1, 2);
+  const values = namesToAppend.map(function (name, index) {
+    return [startRow + index - 1, name, ''];
+  });
+  orderSheet.getRange(startRow, 1, values.length, 3).setValues(values);
+}
+
 function insertRequestRow_(sheet, rowValues) {
   const lock = LockService.getScriptLock();
 
@@ -47,6 +155,397 @@ function insertRequestRow_(sheet, rowValues) {
   } finally {
     lock.releaseLock();
   }
+}
+
+function getOrCreateSheet_(spreadsheet, sheetName) {
+  const existing = spreadsheet.getSheetByName(sheetName);
+  if (existing) {
+    return existing;
+  }
+  return spreadsheet.insertSheet(sheetName);
+}
+
+function setupDashboardLayout_(sheet) {
+  sheet.clear();
+  sheet.setHiddenGridlines(true);
+
+  sheet.getRange('A1').setValue('ダッシュボード');
+  sheet.getRange('A3').setValue('確認する希望着日');
+  sheet.getRange('A4').setValue('表示対象');
+  sheet.getRange('D3').setValue('対象日件数');
+  sheet.getRange('D4').setValue('送り依頼');
+  sheet.getRange('D5').setValue('備品注文');
+  sheet.getRange('D6').setValue('未完了');
+
+  sheet.getRange('A1:K1')
+    .setBackground(DASHBOARD_TITLE_COLOR)
+    .setFontColor('#FFFFFF')
+    .setFontWeight('bold')
+    .setFontSize(16);
+  sheet.setRowHeight(1, 34);
+
+  sheet.getRange('A3:A4')
+    .setBackground(DASHBOARD_LABEL_COLOR)
+    .setFontColor(DASHBOARD_TITLE_COLOR);
+  sheet.getRange('D3:E6')
+    .setBackground(DASHBOARD_SUMMARY_COLOR)
+    .setFontColor(DASHBOARD_TITLE_COLOR);
+  sheet.getRange('A3:A4').setFontWeight('bold');
+  sheet.getRange('D3:D6').setFontWeight('bold');
+
+  const today = Utilities.formatDate(new Date(), getSpreadsheetTimeZone_(), 'yyyy-MM-dd');
+  sheet.getRange('B3').setValue(today);
+  sheet.getRange('B3').setNumberFormat('yyyy-mm-dd');
+  sheet.getRange('B4').setValue(DASHBOARD_STATUS_ALL);
+
+  const statusRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList([DASHBOARD_STATUS_ALL, DASHBOARD_STATUS_PENDING, DASHBOARD_STATUS_DONE], true)
+    .setAllowInvalid(false)
+    .build();
+  sheet.getRange('B4').setDataValidation(statusRule);
+
+  const headers = [[
+    '種別',
+    '依頼者',
+    '希望着日',
+    '送り先/注文内容',
+    '運送会社',
+    '最低CT',
+    '最高CT',
+    '備品注文',
+    '残から',
+    '自由記入',
+    '済'
+  ]];
+  sheet.getRange(DASHBOARD_HEADER_ROW, 1, 1, DASHBOARD_COLUMNS).setValues(headers);
+  formatDashboardTableHeader_(sheet);
+
+  sheet.hideColumns(DASHBOARD_META_START_COLUMN, DASHBOARD_META_COLUMNS);
+  sheet.setFrozenRows(DASHBOARD_HEADER_ROW);
+  setDashboardColumnWidths_(sheet);
+}
+
+function ensureRequesterOrderSheet_(sheet) {
+  if (sheet.getLastRow() >= 1 && String(sheet.getRange(1, 1).getValue()).trim() === '並び順') {
+    return;
+  }
+
+  sheet.clear();
+  sheet.getRange(1, 1, 1, 3).setValues([['並び順', '依頼者', 'メモ']]);
+  sheet.getRange(1, 1, 1, 3).setFontWeight('bold');
+}
+
+function getDashboardTargetDate_(dashboardSheet) {
+  const raw = dashboardSheet.getRange('B3').getValue();
+  const date = raw instanceof Date ? raw : new Date(raw);
+  if (!date || !Number.isFinite(date.getTime())) {
+    throw new Error('ダッシュボード B3 の希望着日が不正です。');
+  }
+  return Utilities.formatDate(date, getSpreadsheetTimeZone_(), 'yyyy-MM-dd');
+}
+
+function getDashboardStatusFilter_(dashboardSheet) {
+  const status = normalizeTextKey_(dashboardSheet.getRange('B4').getValue());
+  if (status === DASHBOARD_STATUS_PENDING || status === DASHBOARD_STATUS_DONE) {
+    return status;
+  }
+  return DASHBOARD_STATUS_ALL;
+}
+
+function readRequesterOrder_() {
+  const orderSheet = getRequiredSheetByName_(REQUESTER_ORDER_SHEET_NAME);
+  const lastRow = orderSheet.getLastRow();
+  const orderMap = {};
+  const names = [];
+
+  if (lastRow < 2) {
+    return { orderMap: orderMap, names: names };
+  }
+
+  const values = orderSheet.getRange(2, 2, lastRow - 1, 1).getValues();
+  values.forEach(function (row) {
+    const name = normalizeTextKey_(row[0]);
+    if (!name || orderMap.hasOwnProperty(name)) {
+      return;
+    }
+    orderMap[name] = names.length + 1;
+    names.push(name);
+  });
+  return { orderMap: orderMap, names: names };
+}
+
+function readShippingRows_(sheetName) {
+  const sheet = getRequiredSheetByName_(sheetName);
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) {
+    return [];
+  }
+  const values = sheet.getRange(2, 1, lastRow - 1, 10).getValues();
+  return values.map(function (row, index) {
+    return {
+      sourceType: DASHBOARD_SOURCE_SHIPPING,
+      timestamp: row[0],
+      requester: row[1],
+      carrier: row[2],
+      arrivalDate: row[3],
+      summary: row[4],
+      minCt: row[5],
+      maxCt: row[6],
+      hasSupplies: row[7],
+      hasRemaining: row[8],
+      freeNote: '',
+      done: row[9],
+      sourceSheetName: sheetName,
+      sourceRow: index + 2
+    };
+  });
+}
+
+function readSupplyRows_(sheetName) {
+  const sheet = getRequiredSheetByName_(sheetName);
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) {
+    return [];
+  }
+  const values = sheet.getRange(2, 1, lastRow - 1, 6).getValues();
+  return values.map(function (row, index) {
+    return {
+      sourceType: DASHBOARD_SOURCE_SUPPLY,
+      timestamp: row[0],
+      requester: row[1],
+      carrier: '',
+      arrivalDate: row[2],
+      summary: row[3],
+      minCt: '',
+      maxCt: '',
+      hasSupplies: '',
+      hasRemaining: '',
+      freeNote: row[4],
+      done: row[5],
+      sourceSheetName: sheetName,
+      sourceRow: index + 2
+    };
+  });
+}
+
+function buildDashboardRows_(config, targetDateKey, statusFilter, requesterOrderMap) {
+  const shippingRows = readShippingRows_(config.masterSheetName);
+  const supplyRows = readSupplyRows_(config.supplySheetName);
+  const allRows = shippingRows.concat(supplyRows);
+  const summary = {
+    total: 0,
+    shipping: 0,
+    supply: 0,
+    pending: 0
+  };
+
+  const filteredRows = allRows.filter(function (row) {
+    return normalizeDateKey_(row.arrivalDate) === targetDateKey;
+  }).filter(function (row) {
+    const done = toDoneBoolean_(row.done);
+    if (statusFilter === DASHBOARD_STATUS_PENDING) {
+      return !done;
+    }
+    if (statusFilter === DASHBOARD_STATUS_DONE) {
+      return done;
+    }
+    return true;
+  });
+
+  filteredRows.forEach(function (row) {
+    summary.total += 1;
+    if (row.sourceType === DASHBOARD_SOURCE_SHIPPING) {
+      summary.shipping += 1;
+    } else {
+      summary.supply += 1;
+    }
+    if (!toDoneBoolean_(row.done)) {
+      summary.pending += 1;
+    }
+  });
+
+  filteredRows.sort(function (left, right) {
+    const leftName = normalizeTextKey_(left.requester);
+    const rightName = normalizeTextKey_(right.requester);
+    const leftOrder = requesterOrderMap.hasOwnProperty(leftName) ? requesterOrderMap[leftName] : Number.MAX_SAFE_INTEGER;
+    const rightOrder = requesterOrderMap.hasOwnProperty(rightName) ? requesterOrderMap[rightName] : Number.MAX_SAFE_INTEGER;
+
+    if (leftOrder !== rightOrder) {
+      return leftOrder - rightOrder;
+    }
+    if (leftName !== rightName) {
+      return leftName.localeCompare(rightName, 'ja');
+    }
+    if (left.sourceType !== right.sourceType) {
+      return left.sourceType === DASHBOARD_SOURCE_SHIPPING ? -1 : 1;
+    }
+
+    return toComparableTime_(left.timestamp) - toComparableTime_(right.timestamp);
+  });
+
+  const dashboardRows = filteredRows.map(function (row) {
+    return [
+      row.sourceType,
+      toOptionalString_(row.requester, ''),
+      normalizeDateKey_(row.arrivalDate),
+      toOptionalString_(row.summary, ''),
+      toOptionalString_(row.carrier, ''),
+      toOptionalString_(row.minCt, ''),
+      toOptionalString_(row.maxCt, ''),
+      toOptionalString_(row.hasSupplies, ''),
+      toOptionalString_(row.hasRemaining, ''),
+      toOptionalString_(row.freeNote, ''),
+      toDoneBoolean_(row.done),
+      row.sourceSheetName,
+      row.sourceRow
+    ];
+  });
+
+  return { rows: dashboardRows, summary: summary };
+}
+
+function writeDashboardRows_(sheet, rows) {
+  removeDashboardFilter_(sheet);
+  removeDashboardBandings_(sheet);
+
+  const maxRows = sheet.getMaxRows();
+  if (maxRows >= DASHBOARD_DATA_START_ROW) {
+    const dataRange = sheet.getRange(DASHBOARD_DATA_START_ROW, 1, maxRows - DASHBOARD_DATA_START_ROW + 1, DASHBOARD_COLUMNS);
+    dataRange.clearContent();
+    dataRange.clearFormat();
+    const metaRange = sheet.getRange(DASHBOARD_DATA_START_ROW, DASHBOARD_META_START_COLUMN, maxRows - DASHBOARD_DATA_START_ROW + 1, DASHBOARD_META_COLUMNS);
+    metaRange.clearContent();
+    sheet.getRange(DASHBOARD_DATA_START_ROW, DASHBOARD_DONE_COLUMN, maxRows - DASHBOARD_DATA_START_ROW + 1, 1).removeCheckboxes();
+  }
+
+  formatDashboardTableHeader_(sheet);
+
+  if (rows.length === 0) {
+    applyDashboardFilter_(sheet, 0);
+    return;
+  }
+
+  const visibleRows = rows.map(function (row) {
+    return row.slice(0, DASHBOARD_COLUMNS);
+  });
+  const metaRows = rows.map(function (row) {
+    return row.slice(DASHBOARD_COLUMNS, DASHBOARD_COLUMNS + DASHBOARD_META_COLUMNS);
+  });
+
+  sheet.getRange(DASHBOARD_DATA_START_ROW, 1, visibleRows.length, DASHBOARD_COLUMNS).setValues(visibleRows);
+  sheet.getRange(DASHBOARD_DATA_START_ROW, DASHBOARD_META_START_COLUMN, metaRows.length, DASHBOARD_META_COLUMNS).setValues(metaRows);
+  sheet.getRange(DASHBOARD_DATA_START_ROW, 3, rows.length, 1).setNumberFormat('yyyy-mm-dd');
+  sheet.getRange(DASHBOARD_DATA_START_ROW, DASHBOARD_DONE_COLUMN, rows.length, 1).insertCheckboxes();
+  sheet.getRange(DASHBOARD_DATA_START_ROW, 1, rows.length, DASHBOARD_COLUMNS).setWrap(true);
+  sheet.hideColumns(DASHBOARD_META_START_COLUMN, DASHBOARD_META_COLUMNS);
+  formatDashboardDataRows_(sheet, rows.length);
+  applyDashboardFilter_(sheet, rows.length);
+}
+
+function writeDashboardSummary_(sheet, summary) {
+  sheet.getRange('E3').setValue(summary.total);
+  sheet.getRange('E4').setValue(summary.shipping);
+  sheet.getRange('E5').setValue(summary.supply);
+  sheet.getRange('E6').setValue(summary.pending);
+}
+
+function formatDashboardTableHeader_(sheet) {
+  sheet.getRange(DASHBOARD_HEADER_ROW, 1, 1, DASHBOARD_COLUMNS)
+    .setBackground(DASHBOARD_HEADER_COLOR)
+    .setFontColor('#FFFFFF')
+    .setFontWeight('bold')
+    .setHorizontalAlignment('center')
+    .setVerticalAlignment('middle');
+  sheet.setRowHeight(DASHBOARD_HEADER_ROW, 28);
+}
+
+function formatDashboardDataRows_(sheet, rowCount) {
+  const tableRange = sheet.getRange(DASHBOARD_HEADER_ROW, 1, rowCount + 1, DASHBOARD_COLUMNS);
+  tableRange.applyRowBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY, true, false);
+  formatDashboardTableHeader_(sheet);
+
+  sheet.getRange(DASHBOARD_DATA_START_ROW, 1, rowCount, DASHBOARD_COLUMNS)
+    .setVerticalAlignment('top')
+    .setBorder(true, true, true, true, true, true, '#D9E2EF', SpreadsheetApp.BorderStyle.SOLID);
+  sheet.getRange(DASHBOARD_DATA_START_ROW, 1, rowCount, 1).setFontWeight('bold');
+  sheet.getRange(DASHBOARD_DATA_START_ROW, 6, rowCount, 2).setHorizontalAlignment('center');
+  sheet.getRange(DASHBOARD_DATA_START_ROW, 8, rowCount, 2).setHorizontalAlignment('center');
+  sheet.getRange(DASHBOARD_DATA_START_ROW, 11, rowCount, 1).setHorizontalAlignment('center');
+}
+
+function setDashboardColumnWidths_(sheet) {
+  sheet.setColumnWidth(1, 90);
+  sheet.setColumnWidth(2, 150);
+  sheet.setColumnWidth(3, 105);
+  sheet.setColumnWidth(4, 280);
+  sheet.setColumnWidth(5, 120);
+  sheet.setColumnWidth(6, 70);
+  sheet.setColumnWidth(7, 70);
+  sheet.setColumnWidth(8, 80);
+  sheet.setColumnWidth(9, 70);
+  sheet.setColumnWidth(10, 280);
+  sheet.setColumnWidth(11, 55);
+}
+
+function applyDashboardFilter_(sheet, rowCount) {
+  const filterRowCount = Math.max(rowCount + 1, 1);
+  sheet.getRange(DASHBOARD_HEADER_ROW, 1, filterRowCount, DASHBOARD_COLUMNS).createFilter();
+}
+
+function removeDashboardFilter_(sheet) {
+  const filter = sheet.getFilter();
+  if (filter) {
+    filter.remove();
+  }
+}
+
+function removeDashboardBandings_(sheet) {
+  sheet.getBandings().forEach(function (banding) {
+    banding.remove();
+  });
+}
+
+function normalizeDateKey_(value) {
+  if (value instanceof Date) {
+    return Utilities.formatDate(value, getSpreadsheetTimeZone_(), 'yyyy-MM-dd');
+  }
+  const text = normalizeTextKey_(value);
+  if (!text) {
+    return '';
+  }
+
+  const parsed = new Date(text);
+  if (Number.isFinite(parsed.getTime())) {
+    return Utilities.formatDate(parsed, getSpreadsheetTimeZone_(), 'yyyy-MM-dd');
+  }
+  return text;
+}
+
+function getSpreadsheetTimeZone_() {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  return spreadsheet ? spreadsheet.getSpreadsheetTimeZone() : 'Asia/Tokyo';
+}
+
+function toDoneBoolean_(value) {
+  if (value === true) {
+    return true;
+  }
+  return String(value).toUpperCase() === 'TRUE';
+}
+
+function toComparableTime_(value) {
+  if (value instanceof Date) {
+    return value.getTime();
+  }
+  const parsed = new Date(value);
+  if (Number.isFinite(parsed.getTime())) {
+    return parsed.getTime();
+  }
+  return Number.MAX_SAFE_INTEGER;
+}
+
+function normalizeTextKey_(value) {
+  return String(value === undefined || value === null ? '' : value).trim();
 }
 
 function getRequiredSheetByName_(sheetName) {
