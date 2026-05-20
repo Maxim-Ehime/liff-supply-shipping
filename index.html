@@ -5,6 +5,25 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>送り依頼フォーム</title>
+  <script>
+    (function () {
+      const params = new URLSearchParams(window.location.search);
+      const state = params.get('liff.state') || '';
+      const decodedState = decodeURIComponent(state).toLowerCase();
+      const directForm = String(params.get('form') || '').toLowerCase();
+      let target = '';
+
+      if (decodedState.indexOf('order_form.html') !== -1 || decodedState.indexOf('form=order') !== -1 || directForm === 'order') {
+        target = './order_form.html';
+      } else if (decodedState.indexOf('history.html') !== -1 || decodedState.indexOf('form=history') !== -1 || directForm === 'history') {
+        target = './history.html';
+      }
+
+      if (target) {
+        window.location.replace(target);
+      }
+    })();
+  </script>
   <style>
     body {
       font-family: -apple-system, "Helvetica Neue", sans-serif;
