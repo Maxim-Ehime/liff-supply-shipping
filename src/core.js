@@ -34,9 +34,12 @@ const DASHBOARD_COLUMNS = 11;
 const DASHBOARD_META_START_COLUMN = 12;
 const DASHBOARD_META_COLUMNS = 2;
 const DASHBOARD_DONE_COLUMN = 11;
+const DASHBOARD_RENDER_MAX_ROWS = 300;
 const DASHBOARD_DATE_STORE_COLUMN = 14; // N
 const DASHBOARD_DATE_STORE_START_ROW = 3;
-const DASHBOARD_DATE_STORE_MAX_ROWS = 100;
+const DASHBOARD_DATE_STORE_MAX_ROWS = 300;
+const DASHBOARD_BUTTON_PROTECTION_DESCRIPTION = 'Dashboard calendar button/display warning';
+const DASHBOARD_DATE_STORE_PROTECTION_DESCRIPTION = 'Dashboard selected date store warning';
 const DASHBOARD_STATUS_ALL = '全件';
 const DASHBOARD_STATUS_PENDING = '未完了のみ';
 const DASHBOARD_STATUS_DONE = '完了のみ';
@@ -48,6 +51,7 @@ const DASHBOARD_LABEL_COLOR = '#E8EEF7';
 const DASHBOARD_SUMMARY_COLOR = '#F7F7F7';
 const SHIPPING_DONE_COLUMN = 12;
 const SUPPLY_DONE_COLUMN = 8;
+const SOURCE_READ_MAX_ROWS = 100;
 const HISTORY_DEFAULT_LIMIT = 50;
 const HISTORY_MAX_LIMIT = 100;
 
@@ -202,7 +206,8 @@ function setupDashboardLayout_(sheet) {
   sheet.getRange('A3')
     .setHorizontalAlignment('center')
     .setVerticalAlignment('middle')
-    .setBorder(true, true, true, true, true, true, '#AAB7C8', SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
+    .setBorder(true, true, true, true, true, true, '#AAB7C8', SpreadsheetApp.BorderStyle.SOLID_MEDIUM)
+    .setNote('図形ボタンをこのセルの上に配置し、showDashboardCalendar を割り当てます。');
 
   const today = normalizeDateKey_(new Date());
   sheet.getRange('B3').setValue(formatDashboardDateSummary_([today]));
@@ -237,6 +242,7 @@ function setupDashboardLayout_(sheet) {
   writeDashboardStoredDates_(sheet, [today]);
   sheet.hideColumns(DASHBOARD_META_START_COLUMN, DASHBOARD_META_COLUMNS);
   sheet.hideColumns(DASHBOARD_DATE_STORE_COLUMN);
+  setupDashboardEditWarnings_(sheet);
   sheet.setFrozenRows(DASHBOARD_HEADER_ROW);
   setDashboardColumnWidths_(sheet);
 }
@@ -258,20 +264,76 @@ function getDashboardTargetDates_(dashboardSheet) {
     .map(function (row) { return normalizeDateKey_(row[0]); })
     .filter(function (value) { return Boolean(value); });
 
+  const unique = uniqueDateKeys_(values);
+  if (unique.length > 0) {
+    return unique;
+  }
+
+  const fallbackDates = getDashboardFallbackTargetDates_(dashboardSheet);
+  if (fallbackDates.length > 0) {
+    writeDashboardStoredDates_(dashboardSheet, fallbackDates);
+    dashboardSheet.getRange('B3').setValue(formatDashboardDateSummary_(fallbackDates));
+    return fallbackDates;
+  }
+
+  const today = normalizeDateKey_(new Date());
+  writeDashboardStoredDates_(dashboardSheet, [today]);
+  dashboardSheet.getRange('B3').setValue(formatDashboardDateSummary_([today]));
+  return [today];
+}
+
+function uniqueDateKeys_(dateKeys) {
   const unique = [];
   const seen = {};
-  values.forEach(function (value) {
+  dateKeys.forEach(function (value) {
     if (!seen.hasOwnProperty(value)) {
       seen[value] = true;
       unique.push(value);
     }
   });
   unique.sort();
-
-  if (unique.length === 0) {
-    throw new Error('希望着日が未選択です。A3 から日付を選択してください。');
-  }
   return unique;
+}
+
+function getDashboardFallbackTargetDates_(dashboardSheet) {
+  const displayText = normalizeTextKey_(dashboardSheet.getRange('B3').getValue());
+  const dateMatches = displayText.match(/\d{4}-\d{2}-\d{2}/g) || [];
+  if (dateMatches.length >= 2 && displayText.indexOf('~') !== -1) {
+    return expandDateRange_(dateMatches[0], dateMatches[1]);
+  }
+  return uniqueDateKeys_(dateMatches.map(function (dateKey) {
+    return normalizeDateKey_(dateKey);
+  }).filter(function (dateKey) {
+    return Boolean(dateKey);
+  }));
+}
+
+function expandDateRange_(startDateKey, endDateKey) {
+  const start = parseDateKey_(startDateKey);
+  const end = parseDateKey_(endDateKey);
+  if (!start || !end || start.getTime() > end.getTime()) {
+    return uniqueDateKeys_([normalizeDateKey_(startDateKey), normalizeDateKey_(endDateKey)]);
+  }
+
+  const dates = [];
+  const current = new Date(start.getTime());
+  while (current.getTime() <= end.getTime() && dates.length < DASHBOARD_DATE_STORE_MAX_ROWS) {
+    dates.push(normalizeDateKey_(current));
+    current.setDate(current.getDate() + 1);
+  }
+  return dates;
+}
+
+function parseDateKey_(dateKey) {
+  const match = String(dateKey).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) {
+    return null;
+  }
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  if (!Number.isFinite(date.getTime())) {
+    return null;
+  }
+  return date;
 }
 
 function getDashboardStatusFilter_(dashboardSheet) {
@@ -310,7 +372,8 @@ function readShippingRows_(sheetName) {
   if (lastRow < 2) {
     return [];
   }
-  const values = sheet.getRange(2, 1, lastRow - 1, SHIPPING_DONE_COLUMN).getValues();
+  const rowCount = getSourceReadRowCount_(lastRow);
+  const values = sheet.getRange(2, 1, rowCount, SHIPPING_DONE_COLUMN).getValues();
   return values.map(function (row, index) {
     const doneValue = row[11] !== '' ? row[11] : row[9];
     return {
@@ -340,7 +403,8 @@ function readSupplyRows_(sheetName) {
   if (lastRow < 2) {
     return [];
   }
-  const values = sheet.getRange(2, 1, lastRow - 1, SUPPLY_DONE_COLUMN).getValues();
+  const rowCount = getSourceReadRowCount_(lastRow);
+  const values = sheet.getRange(2, 1, rowCount, SUPPLY_DONE_COLUMN).getValues();
   return values.map(function (row, index) {
     const doneValue = row[7] !== '' ? row[7] : row[5];
     return {
@@ -362,6 +426,10 @@ function readSupplyRows_(sheetName) {
       sourceRow: index + 2
     };
   });
+}
+
+function getSourceReadRowCount_(lastRow) {
+  return Math.min(lastRow - 1, SOURCE_READ_MAX_ROWS);
 }
 
 function buildDashboardRows_(config, targetDates, statusFilter, requesterOrderMap) {
@@ -448,39 +516,38 @@ function writeDashboardRows_(sheet, rows) {
   removeDashboardFilter_(sheet);
   removeDashboardBandings_(sheet);
 
-  const maxRows = sheet.getMaxRows();
-  if (maxRows >= DASHBOARD_DATA_START_ROW) {
-    const dataRange = sheet.getRange(DASHBOARD_DATA_START_ROW, 1, maxRows - DASHBOARD_DATA_START_ROW + 1, DASHBOARD_COLUMNS);
-    dataRange.clearContent();
-    dataRange.clearFormat();
-    const metaRange = sheet.getRange(DASHBOARD_DATA_START_ROW, DASHBOARD_META_START_COLUMN, maxRows - DASHBOARD_DATA_START_ROW + 1, DASHBOARD_META_COLUMNS);
-    metaRange.clearContent();
-    sheet.getRange(DASHBOARD_DATA_START_ROW, DASHBOARD_DONE_COLUMN, maxRows - DASHBOARD_DATA_START_ROW + 1, 1).removeCheckboxes();
-  }
+  const clearRows = getDashboardWritableRowCount_(sheet);
+  const dataRange = sheet.getRange(DASHBOARD_DATA_START_ROW, 1, clearRows, DASHBOARD_COLUMNS);
+  dataRange.clearContent();
+  dataRange.clearFormat();
+  const metaRange = sheet.getRange(DASHBOARD_DATA_START_ROW, DASHBOARD_META_START_COLUMN, clearRows, DASHBOARD_META_COLUMNS);
+  metaRange.clearContent();
+  sheet.getRange(DASHBOARD_DATA_START_ROW, DASHBOARD_DONE_COLUMN, clearRows, 1).removeCheckboxes();
 
   formatDashboardTableHeader_(sheet);
 
-  if (rows.length === 0) {
+  const rowsToRender = rows.slice(0, DASHBOARD_RENDER_MAX_ROWS);
+  if (rowsToRender.length === 0) {
     applyDashboardFilter_(sheet, 0);
     return;
   }
 
-  const visibleRows = rows.map(function (row) {
+  const visibleRows = rowsToRender.map(function (row) {
     return row.slice(0, DASHBOARD_COLUMNS);
   });
-  const metaRows = rows.map(function (row) {
+  const metaRows = rowsToRender.map(function (row) {
     return row.slice(DASHBOARD_COLUMNS, DASHBOARD_COLUMNS + DASHBOARD_META_COLUMNS);
   });
 
   sheet.getRange(DASHBOARD_DATA_START_ROW, 1, visibleRows.length, DASHBOARD_COLUMNS).setValues(visibleRows);
   sheet.getRange(DASHBOARD_DATA_START_ROW, DASHBOARD_META_START_COLUMN, metaRows.length, DASHBOARD_META_COLUMNS).setValues(metaRows);
-  sheet.getRange(DASHBOARD_DATA_START_ROW, 3, rows.length, 1).setNumberFormat('yyyy-mm-dd');
-  sheet.getRange(DASHBOARD_DATA_START_ROW, DASHBOARD_DONE_COLUMN, rows.length, 1).insertCheckboxes();
-  sheet.getRange(DASHBOARD_DATA_START_ROW, 1, rows.length, DASHBOARD_COLUMNS).setWrap(true);
+  sheet.getRange(DASHBOARD_DATA_START_ROW, 3, rowsToRender.length, 1).setNumberFormat('yyyy-mm-dd');
+  sheet.getRange(DASHBOARD_DATA_START_ROW, DASHBOARD_DONE_COLUMN, rowsToRender.length, 1).insertCheckboxes();
+  sheet.getRange(DASHBOARD_DATA_START_ROW, 1, rowsToRender.length, DASHBOARD_COLUMNS).setWrap(true);
   sheet.hideColumns(DASHBOARD_META_START_COLUMN, DASHBOARD_META_COLUMNS);
   sheet.hideColumns(DASHBOARD_DATE_STORE_COLUMN);
-  formatDashboardDataRows_(sheet, rows.length);
-  applyDashboardFilter_(sheet, rows.length);
+  formatDashboardDataRows_(sheet, rowsToRender.length);
+  applyDashboardFilter_(sheet, rowsToRender.length);
 }
 
 function writeDashboardSummary_(sheet, summary) {
@@ -526,6 +593,13 @@ function setDashboardColumnWidths_(sheet) {
   sheet.setColumnWidth(9, 70);
   sheet.setColumnWidth(10, 280);
   sheet.setColumnWidth(11, 55);
+}
+
+function getDashboardWritableRowCount_(sheet) {
+  return Math.min(
+    DASHBOARD_RENDER_MAX_ROWS,
+    Math.max(sheet.getMaxRows() - DASHBOARD_DATA_START_ROW + 1, 1)
+  );
 }
 
 function applyDashboardFilter_(sheet, rowCount) {
@@ -589,6 +663,29 @@ function writeDashboardStoredDates_(sheet, dateKeys) {
       1
     ).setValues(values);
   }
+}
+
+function setupDashboardEditWarnings_(sheet) {
+  removeDashboardProtectionByDescription_(sheet, DASHBOARD_BUTTON_PROTECTION_DESCRIPTION);
+  removeDashboardProtectionByDescription_(sheet, DASHBOARD_DATE_STORE_PROTECTION_DESCRIPTION);
+
+  sheet.getRange('A3:B3')
+    .protect()
+    .setDescription(DASHBOARD_BUTTON_PROTECTION_DESCRIPTION)
+    .setWarningOnly(true);
+
+  sheet.getRange(DASHBOARD_DATE_STORE_START_ROW, DASHBOARD_DATE_STORE_COLUMN, DASHBOARD_DATE_STORE_MAX_ROWS, 1)
+    .protect()
+    .setDescription(DASHBOARD_DATE_STORE_PROTECTION_DESCRIPTION)
+    .setWarningOnly(true);
+}
+
+function removeDashboardProtectionByDescription_(sheet, description) {
+  sheet.getProtections(SpreadsheetApp.ProtectionType.RANGE).forEach(function (protection) {
+    if (protection.getDescription() === description) {
+      protection.remove();
+    }
+  });
 }
 
 function getDashboardStoredDatesForDialog_() {

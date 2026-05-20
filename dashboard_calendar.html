@@ -58,6 +58,11 @@
       color: #fff;
     }
 
+    button:disabled {
+      cursor: default;
+      opacity: 0.58;
+    }
+
     button.ghost {
       color: var(--muted);
     }
@@ -109,6 +114,18 @@
       min-height: 18px;
     }
 
+    .busy-line {
+      display: none;
+      margin-top: 8px;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    body.is-busy .busy-line {
+      display: block;
+    }
+
     .footer {
       display: flex;
       justify-content: space-between;
@@ -128,11 +145,12 @@
     </div>
     <div id="grid" class="grid"></div>
     <div id="selectedLine" class="selected-line"></div>
+    <div id="busyLine" class="busy-line">反映中...</div>
     <div class="footer">
-      <button type="button" class="ghost" onclick="clearDates()">クリア</button>
+      <button id="clearButton" type="button" class="ghost" onclick="clearDates()">クリア</button>
       <div>
-        <button type="button" class="ghost" onclick="google.script.host.close()">閉じる</button>
-        <button type="button" class="primary" onclick="applyDates()">適用</button>
+        <button id="closeButton" type="button" class="ghost" onclick="google.script.host.close()">閉じる</button>
+        <button id="applyButton" type="button" class="primary" onclick="applyDates()">適用</button>
       </div>
     </div>
   </div>
@@ -142,6 +160,7 @@
     const selected = new Set(initialDates);
     const today = toDateKey(new Date());
     let current = getInitialMonth();
+    let isBusy = false;
 
     function getInitialMonth() {
       const base = initialDates.length > 0 ? new Date(initialDates[0]) : new Date();
@@ -156,27 +175,46 @@
     }
 
     function moveMonth(delta) {
+      if (isBusy) return;
       current = new Date(current.getFullYear(), current.getMonth() + delta, 1);
       render();
     }
 
     function toggleDate(key) {
+      if (isBusy) return;
       if (selected.has(key)) selected.delete(key);
       else selected.add(key);
       render();
     }
 
     function clearDates() {
+      if (isBusy) return;
       selected.clear();
       render();
     }
 
     function applyDates() {
+      if (isBusy) return;
       const dates = Array.from(selected).sort();
+      setBusy(true);
       google.script.run
         .withSuccessHandler(() => google.script.host.close())
-        .withFailureHandler((error) => alert(error && error.message ? error.message : String(error)))
+        .withFailureHandler((error) => {
+          setBusy(false);
+          alert(error && error.message ? error.message : String(error));
+        })
         .saveDashboardSelectedDates(dates);
+    }
+
+    function setBusy(value) {
+      isBusy = value;
+      document.body.classList.toggle("is-busy", value);
+      document.getElementById("applyButton").disabled = value;
+      document.getElementById("clearButton").disabled = value;
+      document.getElementById("closeButton").disabled = value;
+      document.querySelectorAll(".day").forEach((button) => {
+        button.disabled = value;
+      });
     }
 
     function render() {
