@@ -319,7 +319,7 @@
     async function init() {
       try {
         await liff.init({ liffId: LIFF_ID });
-        if (!liff.isLoggedIn()) { liff.login({ redirectUri: window.location.href }); return; }
+        if (!liff.isLoggedIn()) { liff.login(); return; }
         const profile = await liff.getProfile();
         currentProfile = profile;
         const savedName = localStorage.getItem(USER_NAME_STORAGE_KEY) || localStorage.getItem('shippingUserName');
@@ -334,7 +334,7 @@
         return currentProfile.userId;
       }
       if (!liff.isLoggedIn()) {
-        liff.login({ redirectUri: window.location.href });
+        liff.login();
         return '';
       }
       currentProfile = await liff.getProfile();
