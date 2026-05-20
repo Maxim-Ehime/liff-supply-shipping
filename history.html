@@ -295,9 +295,11 @@
       try {
         await liff.init({ liffId: LIFF_ID });
         if (!liff.isLoggedIn()) {
+          rememberPendingLiffForm('history');
           liff.login();
           return;
         }
+        clearPendingLiffForm();
         currentProfile = await liff.getProfile();
         applyFilterButtonState();
         await loadHistory();
@@ -305,6 +307,24 @@
         setError('LIFFの初期化に失敗しました: ' + error.message);
       } finally {
         setLoading(false);
+      }
+    }
+
+    function clearPendingLiffForm() {
+      try {
+        sessionStorage.removeItem('pendingLiffForm');
+        sessionStorage.removeItem('pendingLiffFormTime');
+      } catch (error) {
+        // Ignore storage errors in restricted browser contexts.
+      }
+    }
+
+    function rememberPendingLiffForm(form) {
+      try {
+        sessionStorage.setItem('pendingLiffForm', form);
+        sessionStorage.setItem('pendingLiffFormTime', String(Date.now()));
+      } catch (error) {
+        // Ignore storage errors in restricted browser contexts.
       }
     }
 

@@ -7,19 +7,49 @@
   <title>送り依頼フォーム</title>
   <script>
     (function () {
+      const PENDING_FORM_KEY = 'pendingLiffForm';
+      const PENDING_FORM_TIME_KEY = 'pendingLiffFormTime';
+      const PENDING_FORM_TTL_MS = 120000;
       const params = new URLSearchParams(window.location.search);
       const state = params.get('liff.state') || '';
       const decodedState = decodeURIComponent(state).toLowerCase();
       const directForm = String(params.get('form') || '').toLowerCase();
       let target = '';
+      let form = '';
 
       if (decodedState.indexOf('order_form.html') !== -1 || decodedState.indexOf('form=order') !== -1 || directForm === 'order') {
-        target = './order_form.html';
+        form = 'order';
       } else if (decodedState.indexOf('history.html') !== -1 || decodedState.indexOf('form=history') !== -1 || directForm === 'history') {
+        form = 'history';
+      } else {
+        try {
+          const pendingForm = sessionStorage.getItem(PENDING_FORM_KEY);
+          const pendingTime = Number(sessionStorage.getItem(PENDING_FORM_TIME_KEY));
+          if (
+            (pendingForm === 'order' || pendingForm === 'history') &&
+            Number.isFinite(pendingTime) &&
+            Date.now() - pendingTime < PENDING_FORM_TTL_MS
+          ) {
+            form = pendingForm;
+          }
+        } catch (error) {
+          form = '';
+        }
+      }
+
+      if (form === 'order') {
+        target = './order_form.html';
+      } else if (form === 'history') {
         target = './history.html';
       }
 
       if (target) {
+        try {
+          sessionStorage.setItem(PENDING_FORM_KEY, form);
+          sessionStorage.setItem(PENDING_FORM_TIME_KEY, String(Date.now()));
+        } catch (error) {
+          // Continue even if sessionStorage is unavailable.
+        }
         window.location.replace(target);
       }
     })();
@@ -320,6 +350,7 @@
       try {
         await liff.init({ liffId: LIFF_ID });
         if (!liff.isLoggedIn()) { liff.login(); return; }
+        clearPendingLiffForm();
         const profile = await liff.getProfile();
         currentProfile = profile;
         const savedName = localStorage.getItem(USER_NAME_STORAGE_KEY) || localStorage.getItem('shippingUserName');
@@ -395,6 +426,15 @@
 
     function openHistory() {
       window.location.href = HISTORY_URL;
+    }
+
+    function clearPendingLiffForm() {
+      try {
+        sessionStorage.removeItem('pendingLiffForm');
+        sessionStorage.removeItem('pendingLiffFormTime');
+      } catch (error) {
+        // Ignore storage errors in restricted browser contexts.
+      }
     }
 
     init();

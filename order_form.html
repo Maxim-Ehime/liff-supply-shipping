@@ -404,7 +404,12 @@
     async function initializeLiff() {
       try {
         await liff.init({ liffId: LIFF_ID });
-        if (!liff.isLoggedIn()) { liff.login(); return; }
+        if (!liff.isLoggedIn()) {
+          rememberPendingLiffForm('order');
+          liff.login();
+          return;
+        }
+        clearPendingLiffForm();
         const profile = await liff.getProfile();
         currentProfile = profile;
         const savedName = localStorage.getItem(USER_NAME_STORAGE_KEY) || localStorage.getItem('shippingUserName');
@@ -419,11 +424,30 @@
         return currentProfile.userId;
       }
       if (!liff.isLoggedIn()) {
+        rememberPendingLiffForm('order');
         liff.login();
         return '';
       }
       currentProfile = await liff.getProfile();
       return currentProfile.userId || '';
+    }
+
+    function clearPendingLiffForm() {
+      try {
+        sessionStorage.removeItem('pendingLiffForm');
+        sessionStorage.removeItem('pendingLiffFormTime');
+      } catch (error) {
+        // Ignore storage errors in restricted browser contexts.
+      }
+    }
+
+    function rememberPendingLiffForm(form) {
+      try {
+        sessionStorage.setItem('pendingLiffForm', form);
+        sessionStorage.setItem('pendingLiffFormTime', String(Date.now()));
+      } catch (error) {
+        // Ignore storage errors in restricted browser contexts.
+      }
     }
 
     window.onload = function () {
