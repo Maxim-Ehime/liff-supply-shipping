@@ -828,7 +828,11 @@ function normalizeOrderPayload_(rawData) {
 
   const items = data.items.map(function (item, index) {
     const row = ensureObject_(item, 'items[' + index + ']');
+    const itemNo = row.itemNo === undefined || row.itemNo === null || row.itemNo === ''
+      ? parseLeadingItemNo_(row.name)
+      : toPositiveInteger_(row.itemNo, 'items[' + index + '].itemNo');
     return {
+      itemNo: itemNo,
       name: toRequiredString_(row.name, 'items[' + index + '].name'),
       qty: toNonNegativeInteger_(row.qty, 'items[' + index + '].qty')
     };
@@ -988,8 +992,7 @@ function toIsoString_(value) {
 
 function formatOrderItemsForSheet_(items) {
   const formattedItems = items.map(function (item) {
-    const name = stripNumber_(item.name);
-    return name + ' x ' + item.qty;
+    return formatOrderItemLabel_(item) + ' x ' + item.qty;
   });
   const lines = [];
 
@@ -1002,13 +1005,28 @@ function formatOrderItemsForSheet_(items) {
 
 function formatOrderItemsForNotification_(items) {
   return items.map(function (item) {
-    const name = stripNumber_(item.name);
-    return name + ' x ' + item.qty;
+    return formatOrderItemLabel_(item) + ' x ' + item.qty;
   }).join('\n');
+}
+
+function formatOrderItemLabel_(item) {
+  const name = stripNumber_(item.name);
+  if (item.itemNo && Number.isFinite(item.itemNo)) {
+    return item.itemNo + '.' + name;
+  }
+  return name;
 }
 
 function stripNumber_(name) {
   return String(name).replace(/^\s*\d+\.\s*/, '');
+}
+
+function parseLeadingItemNo_(name) {
+  const match = String(name).match(/^\s*(\d+)\./);
+  if (!match) {
+    return null;
+  }
+  return Number(match[1]);
 }
 
 function buildShippingNotificationText_(shippingData) {
@@ -1071,6 +1089,14 @@ function toNonNegativeInteger_(value, fieldName) {
   const numberValue = Number(value);
   if (!Number.isFinite(numberValue) || numberValue < 0 || Math.floor(numberValue) !== numberValue) {
     throw new Error(fieldName + ' must be a non-negative integer.');
+  }
+  return numberValue;
+}
+
+function toPositiveInteger_(value, fieldName) {
+  const numberValue = Number(value);
+  if (!Number.isFinite(numberValue) || numberValue <= 0 || Math.floor(numberValue) !== numberValue) {
+    throw new Error(fieldName + ' must be a positive integer.');
   }
   return numberValue;
 }

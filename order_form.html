@@ -301,19 +301,60 @@
 
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script>
-    const supplyList1 = ["1.セロテープ(大)", "2.セロテープ(ミニ)", "3.ガムテープ", "4.雑巾", "5.アルコール", "6.ユニット/カプステ(400円機)",
-      "7.ユニット/カプステ(500円機)", "8.ユニット/ガシャステ", "9.金属セレクター", "10.プラセレクター", "11.高額ユニット(プレミアム専用)",
-      "12.精算書(青伝)", "13.精算書(横伝 ゆめタウン)", "14.精算書(横伝 ツタヤ)", "15.調整中POP", "16.返送メモ", "17.福通伝票(親伝)",
-      "18.福通伝票(孫伝)", "19.集金袋"];
+    const supplyList1 = [
+      { itemNo: 1, name: "セロテープ(大)" },
+      { itemNo: 2, name: "セロテープ(ミニ)" },
+      { itemNo: 3, name: "ガムテープ" },
+      { itemNo: 4, name: "雑巾" },
+      { itemNo: 5, name: "アルコール" },
+      { itemNo: 6, name: "ユニット/カプステ(400円機)" },
+      { itemNo: 7, name: "ユニット/カプステ(500円機)" },
+      { itemNo: 8, name: "ユニット/ガシャステ" },
+      { itemNo: 9, name: "金属セレクター" },
+      { itemNo: 10, name: "プラセレクター" },
+      { itemNo: 11, name: "高額ユニット(プレミアム専用)" },
+      { itemNo: 12, name: "精算書(青伝)" },
+      { itemNo: 13, name: "精算書(横伝 ゆめタウン)" },
+      { itemNo: 14, name: "精算書(横伝 ツタヤ)" },
+      { itemNo: 15, name: "調整中POP" },
+      { itemNo: 16, name: "返送メモ" },
+      { itemNo: 17, name: "福通伝票(親伝)" },
+      { itemNo: 18, name: "福通伝票(孫伝)" },
+      { itemNo: 19, name: "集金袋" }
+    ];
 
-    const supplyList2 = ["1.エアレジ用ロール紙", "2.お買い上げテープ", "3.持ち帰り袋", "4.あたりシール", "5.当たり台紙", "6.当たりハガキ", "7.NEWポップ(ラミ加工)",
-      "8.ラミネータ用紙A4", "9.ラミネータ用紙A3", "10.オズコレボビニール袋M", "11.オズコレボビニール袋L", "12.オズコレボ紙袋", "13.ゴミ袋45L", "14.ゴミ袋90L",
-      "15.月売上表", "16.金種表", "17.物販売上レシート", "18.打刻漏れ・修正希望一覧", "19.◯月入荷表", "20.DPなし貼付シート", "21.返品当たりシールチェック用紙",
-      "22.高額集計表", "23.その他(アルパークのみ)", "24.その他(高松・オルネのみ", "25.その他(ASOBIGOCORO・アルパークのみ)"];
+    const supplyList2 = [
+      { itemNo: 21, name: "エアレジ用ロール紙" },
+      { itemNo: 22, name: "お買い上げテープ" },
+      { itemNo: 23, name: "持ち帰り袋" },
+      { itemNo: 24, name: "あたりシール" },
+      { itemNo: 25, name: "当たり台紙" },
+      { itemNo: 26, name: "当たりハガキ" },
+      { itemNo: 27, name: "NEWポップ(ラミ加工)" },
+      { itemNo: 28, name: "ラミネータ用紙A4" },
+      { itemNo: 29, name: "ラミネータ用紙A3" },
+      { itemNo: 30, name: "オズコレボビニール袋M" },
+      { itemNo: 31, name: "オズコレボビニール袋L" },
+      { itemNo: 32, name: "オズコレボ紙袋" },
+      { itemNo: 33, name: "ゴミ袋45L" },
+      { itemNo: 34, name: "ゴミ袋90L" },
+      { itemNo: 35, name: "月売上表" },
+      { itemNo: 36, name: "金種表" },
+      { itemNo: 37, name: "物販売上レシート" },
+      { itemNo: 38, name: "打刻漏れ・修正希望一覧" },
+      { itemNo: 39, name: "◯月入荷表" },
+      { itemNo: 40, name: "DPなし貼付シート" },
+      { itemNo: 41, name: "返品当たりシールチェック用紙" },
+      { itemNo: 42, name: "高額集計表" },
+      { itemNo: 43, name: "その他(アルパークのみ)" },
+      { itemNo: 44, name: "その他(高松・オルネのみ" },
+      { itemNo: 45, name: "その他(ASOBIGOCORO・アルパークのみ)" }
+    ];
+    const allSupplyItems = [...supplyList1, ...supplyList2];
 
     // 画像パスの設定
-    const IMG_1 = ["img/supply_standard.jpg"];
-    const IMG_2 = ["img/supply_shop.jpg"];
+    const IMG_1 = ["img/supply_standard.png"];
+    const IMG_2 = ["img/supply_shop.png"];
 
     const GAS_URL = "https://script.google.com/macros/s/AKfycbz6M7Gi704Vc3qlMQ7GD4Hh8mq0rf4I8QH-kqT7oOs1T8jkYJB6JQFQmMS3IhGD31VE/exec";
     const LIFF_ID = "2009669107-iTCKuJvo";
@@ -339,16 +380,22 @@
       container.innerHTML = images.map(src => `<img class="modal-content" src="${src}" alt="備品画像">`).join('');
     }
 
+    function toItemInputId(item) {
+      return 'item-' + item.itemNo;
+    }
+
     function renderList(list, containerId) {
       const container = document.getElementById(containerId);
-      list.forEach(name => {
+      list.forEach(item => {
+        const inputId = toItemInputId(item);
+        const displayName = item.itemNo + '.' + item.name;
         container.innerHTML += `
           <div class="item-card">
-            <div class="item-name">${name}</div>
+            <div class="item-name">${displayName}</div>
             <div class="qty-controls">
-              <button class="btn-qty" onclick="changeQty('${name}', -1)">−</button>
-              <input type="number" class="qty-input" id="${name}" value="0" min="0" readonly>
-              <button class="btn-qty" onclick="changeQty('${name}', 1)">＋</button>
+              <button class="btn-qty" onclick="changeQty('${inputId}', -1)">−</button>
+              <input type="number" class="qty-input" id="${inputId}" value="0" min="0" readonly>
+              <button class="btn-qty" onclick="changeQty('${inputId}', 1)">＋</button>
             </div>
           </div>`;
       });
@@ -413,9 +460,11 @@
           return;
         }
 
-        [...supplyList1, ...supplyList2].forEach(name => {
-          const qty = parseInt(document.getElementById(name).value);
-          if (qty > 0) order.push({ name: name, qty: qty });
+        allSupplyItems.forEach(item => {
+          const qty = parseInt(document.getElementById(toItemInputId(item)).value, 10);
+          if (qty > 0) {
+            order.push({ itemNo: item.itemNo, name: item.name, qty: qty });
+          }
         });
 
         if (order.length === 0 && !freeNote) {
