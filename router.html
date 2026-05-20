@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Redirecting...</title>
+  <script>
+    (function () {
+      function normalizeForm(value) {
+        if (!value) return "";
+        return String(value).trim().toLowerCase();
+      }
+
+      function resolveFormFromPath(pathname) {
+        const path = String(pathname || "").toLowerCase();
+        if (path.endsWith("/order_form.html")) return "order";
+        if (path.endsWith("/history.html")) return "history";
+        return "";
+      }
+
+      function targetByForm(form) {
+        if (form === "order") return "./order_form.html";
+        if (form === "history") return "./history.html";
+        return "./index.html";
+      }
+
+      const params = new URLSearchParams(window.location.search);
+      const queryForm = normalizeForm(params.get("form"));
+      const pathForm = resolveFormFromPath(window.location.pathname);
+      const form = queryForm || pathForm || "shipping";
+      const target = targetByForm(form);
+
+      // Replace so the router page itself is not left in history.
+      window.location.replace(target);
+    })();
+  </script>
+</head>
+<body></body>
+</html>
