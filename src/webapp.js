@@ -40,6 +40,7 @@ function doPost(e) {
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('ダッシュボード')
+    .addItem('日付を選択', 'showDashboardCalendar')
     .addItem('初期作成', 'setupDashboard')
     .addItem('更新', 'refreshDashboard')
     .addItem('依頼者順を補完', 'supplementRequesterOrder')
@@ -58,6 +59,11 @@ function onEdit(e) {
 
   const row = e.range.getRow();
   const col = e.range.getColumn();
+  if (row === 3 && col === 1) {
+    showDashboardCalendar();
+    return;
+  }
+
   if ((row === 3 || row === 4) && col === 2) {
     refreshDashboard();
     return;

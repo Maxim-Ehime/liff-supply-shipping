@@ -34,6 +34,9 @@ const DASHBOARD_COLUMNS = 11;
 const DASHBOARD_META_START_COLUMN = 12;
 const DASHBOARD_META_COLUMNS = 2;
 const DASHBOARD_DONE_COLUMN = 11;
+const DASHBOARD_DATE_STORE_COLUMN = 14; // N
+const DASHBOARD_DATE_STORE_START_ROW = 3;
+const DASHBOARD_DATE_STORE_MAX_ROWS = 100;
 const DASHBOARD_STATUS_ALL = '全件';
 const DASHBOARD_STATUS_PENDING = '未完了のみ';
 const DASHBOARD_STATUS_DONE = '完了のみ';
@@ -67,10 +70,10 @@ function setupDashboard() {
 function refreshDashboard() {
   const config = getAppConfig_();
   const dashboardSheet = getRequiredSheetByName_(DASHBOARD_SHEET_NAME);
-  const targetDate = getDashboardTargetDate_(dashboardSheet);
+  const targetDates = getDashboardTargetDates_(dashboardSheet);
   const statusFilter = getDashboardStatusFilter_(dashboardSheet);
   const requesterOrder = readRequesterOrder_();
-  const mergedRows = buildDashboardRows_(config, targetDate, statusFilter, requesterOrder.orderMap);
+  const mergedRows = buildDashboardRows_(config, targetDates, statusFilter, requesterOrder.orderMap);
 
   writeDashboardRows_(dashboardSheet, mergedRows.rows);
   writeDashboardSummary_(dashboardSheet, mergedRows.summary);
@@ -174,7 +177,7 @@ function setupDashboardLayout_(sheet) {
   sheet.setHiddenGridlines(true);
 
   sheet.getRange('A1').setValue('ダッシュボード');
-  sheet.getRange('A3').setValue('確認する希望着日');
+  sheet.getRange('A3').setValue('日付を選択');
   sheet.getRange('A4').setValue('表示対象');
   sheet.getRange('D3').setValue('対象日件数');
   sheet.getRange('D4').setValue('送り依頼');
@@ -196,10 +199,17 @@ function setupDashboardLayout_(sheet) {
     .setFontColor(DASHBOARD_TITLE_COLOR);
   sheet.getRange('A3:A4').setFontWeight('bold');
   sheet.getRange('D3:D6').setFontWeight('bold');
+  sheet.getRange('A3')
+    .setHorizontalAlignment('center')
+    .setVerticalAlignment('middle')
+    .setBorder(true, true, true, true, true, true, '#AAB7C8', SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
 
-  const today = Utilities.formatDate(new Date(), getSpreadsheetTimeZone_(), 'yyyy-MM-dd');
-  sheet.getRange('B3').setValue(today);
-  sheet.getRange('B3').setNumberFormat('yyyy-mm-dd');
+  const today = normalizeDateKey_(new Date());
+  sheet.getRange('B3').setValue(formatDashboardDateSummary_([today]));
+  sheet.getRange('B3').setNumberFormat('@');
+  sheet.getRange('B3')
+    .setHorizontalAlignment('left')
+    .setNote('A3 をクリックして希望着日を複数選択');
   sheet.getRange('B4').setValue(DASHBOARD_STATUS_ALL);
 
   const statusRule = SpreadsheetApp.newDataValidation()
@@ -224,7 +234,9 @@ function setupDashboardLayout_(sheet) {
   sheet.getRange(DASHBOARD_HEADER_ROW, 1, 1, DASHBOARD_COLUMNS).setValues(headers);
   formatDashboardTableHeader_(sheet);
 
+  writeDashboardStoredDates_(sheet, [today]);
   sheet.hideColumns(DASHBOARD_META_START_COLUMN, DASHBOARD_META_COLUMNS);
+  sheet.hideColumns(DASHBOARD_DATE_STORE_COLUMN);
   sheet.setFrozenRows(DASHBOARD_HEADER_ROW);
   setDashboardColumnWidths_(sheet);
 }
@@ -239,13 +251,27 @@ function ensureRequesterOrderSheet_(sheet) {
   sheet.getRange(1, 1, 1, 3).setFontWeight('bold');
 }
 
-function getDashboardTargetDate_(dashboardSheet) {
-  const raw = dashboardSheet.getRange('B3').getValue();
-  const date = raw instanceof Date ? raw : new Date(raw);
-  if (!date || !Number.isFinite(date.getTime())) {
-    throw new Error('ダッシュボード B3 の希望着日が不正です。');
+function getDashboardTargetDates_(dashboardSheet) {
+  const values = dashboardSheet
+    .getRange(DASHBOARD_DATE_STORE_START_ROW, DASHBOARD_DATE_STORE_COLUMN, DASHBOARD_DATE_STORE_MAX_ROWS, 1)
+    .getValues()
+    .map(function (row) { return normalizeDateKey_(row[0]); })
+    .filter(function (value) { return Boolean(value); });
+
+  const unique = [];
+  const seen = {};
+  values.forEach(function (value) {
+    if (!seen.hasOwnProperty(value)) {
+      seen[value] = true;
+      unique.push(value);
+    }
+  });
+  unique.sort();
+
+  if (unique.length === 0) {
+    throw new Error('希望着日が未選択です。A3 から日付を選択してください。');
   }
-  return Utilities.formatDate(date, getSpreadsheetTimeZone_(), 'yyyy-MM-dd');
+  return unique;
 }
 
 function getDashboardStatusFilter_(dashboardSheet) {
@@ -338,10 +364,14 @@ function readSupplyRows_(sheetName) {
   });
 }
 
-function buildDashboardRows_(config, targetDateKey, statusFilter, requesterOrderMap) {
+function buildDashboardRows_(config, targetDates, statusFilter, requesterOrderMap) {
   const shippingRows = readShippingRows_(config.masterSheetName);
   const supplyRows = readSupplyRows_(config.supplySheetName);
   const allRows = shippingRows.concat(supplyRows);
+  const targetMap = {};
+  targetDates.forEach(function (dateKey) {
+    targetMap[dateKey] = true;
+  });
   const summary = {
     total: 0,
     shipping: 0,
@@ -350,7 +380,7 @@ function buildDashboardRows_(config, targetDateKey, statusFilter, requesterOrder
   };
 
   const filteredRows = allRows.filter(function (row) {
-    return normalizeDateKey_(row.arrivalDate) === targetDateKey;
+    return targetMap.hasOwnProperty(normalizeDateKey_(row.arrivalDate));
   }).filter(function (row) {
     const done = toDoneBoolean_(row.done);
     if (statusFilter === DASHBOARD_STATUS_PENDING) {
@@ -448,6 +478,7 @@ function writeDashboardRows_(sheet, rows) {
   sheet.getRange(DASHBOARD_DATA_START_ROW, DASHBOARD_DONE_COLUMN, rows.length, 1).insertCheckboxes();
   sheet.getRange(DASHBOARD_DATA_START_ROW, 1, rows.length, DASHBOARD_COLUMNS).setWrap(true);
   sheet.hideColumns(DASHBOARD_META_START_COLUMN, DASHBOARD_META_COLUMNS);
+  sheet.hideColumns(DASHBOARD_DATE_STORE_COLUMN);
   formatDashboardDataRows_(sheet, rows.length);
   applyDashboardFilter_(sheet, rows.length);
 }
@@ -529,6 +560,75 @@ function normalizeDateKey_(value) {
     return Utilities.formatDate(parsed, getSpreadsheetTimeZone_(), 'yyyy-MM-dd');
   }
   return text;
+}
+
+function writeDashboardStoredDates_(sheet, dateKeys) {
+  const values = [];
+  const seen = {};
+  dateKeys.forEach(function (dateKey) {
+    const normalized = normalizeDateKey_(dateKey);
+    if (!normalized || seen.hasOwnProperty(normalized)) {
+      return;
+    }
+    seen[normalized] = true;
+    values.push([normalized]);
+  });
+
+  const storeRange = sheet.getRange(
+    DASHBOARD_DATE_STORE_START_ROW,
+    DASHBOARD_DATE_STORE_COLUMN,
+    DASHBOARD_DATE_STORE_MAX_ROWS,
+    1
+  );
+  storeRange.clearContent();
+  if (values.length > 0) {
+    sheet.getRange(
+      DASHBOARD_DATE_STORE_START_ROW,
+      DASHBOARD_DATE_STORE_COLUMN,
+      values.length,
+      1
+    ).setValues(values);
+  }
+}
+
+function getDashboardStoredDatesForDialog_() {
+  const sheet = getRequiredSheetByName_(DASHBOARD_SHEET_NAME);
+  return getDashboardTargetDates_(sheet);
+}
+
+function saveDashboardSelectedDates(dateKeys) {
+  if (!Array.isArray(dateKeys)) {
+    throw new Error('dateKeys must be an array.');
+  }
+  if (dateKeys.length === 0) {
+    throw new Error('日付を1件以上選択してください。');
+  }
+
+  const sheet = getRequiredSheetByName_(DASHBOARD_SHEET_NAME);
+  writeDashboardStoredDates_(sheet, dateKeys);
+  const selectedDates = getDashboardTargetDates_(sheet);
+  sheet.getRange('B3').setValue(formatDashboardDateSummary_(selectedDates));
+  refreshDashboard();
+}
+
+function formatDashboardDateSummary_(dateKeys) {
+  if (!dateKeys || dateKeys.length === 0) {
+    return '';
+  }
+  const sorted = dateKeys.slice().sort();
+  if (sorted.length === 1) {
+    return sorted[0] + ' (1日)';
+  }
+  return sorted[0] + ' ~ ' + sorted[sorted.length - 1] + ' (' + sorted.length + '日)';
+}
+
+function showDashboardCalendar() {
+  const template = HtmlService.createTemplateFromFile('dashboard_calendar');
+  template.initialDatesJson = JSON.stringify(getDashboardStoredDatesForDialog_());
+  const html = template.evaluate()
+    .setWidth(420)
+    .setHeight(520);
+  SpreadsheetApp.getUi().showModalDialog(html, '希望着日を選択');
 }
 
 function getSpreadsheetTimeZone_() {
