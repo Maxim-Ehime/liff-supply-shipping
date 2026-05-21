@@ -4,7 +4,9 @@ function getAppConfig_() {
     lineToken: getRequiredScriptProperty_('LINE_TOKEN'),
     masterSheetName: getRequiredScriptProperty_('MASTER_SHEET_NAME'),
     supplySheetName: getRequiredScriptProperty_('SUPPLY_SHEET_NAME'),
-    targetUserId: getRequiredScriptProperty_('TARGET_USER_ID')
+    targetUserId: getRequiredScriptProperty_('TARGET_USER_ID'),
+    productRequestSheetName: getOptionalScriptProperty_('PRODUCT_REQUEST_SHEET_NAME', '商品希望'),
+    productRequestImageFolderId: getOptionalScriptProperty_('PRODUCT_REQUEST_IMAGE_FOLDER_ID', '')
   };
 }
 
@@ -16,6 +18,14 @@ function getRequiredScriptProperty_(key) {
   return value;
 }
 
+function getOptionalScriptProperty_(key, fallback) {
+  const value = PropertiesService.getScriptProperties().getProperty(key);
+  if (value === null || value === undefined || String(value).trim() === '') {
+    return fallback;
+  }
+  return String(value);
+}
+
 function appendShippingToSheet_(shippingData, config) {
   const sheet = getRequiredSheetByName_(config.masterSheetName);
   insertRequestRow_(sheet, toShippingRow_(shippingData));
@@ -24,6 +34,55 @@ function appendShippingToSheet_(shippingData, config) {
 function appendSupplyOrderToSheet_(orderData, config) {
   const sheet = getRequiredSheetByName_(config.supplySheetName);
   insertRequestRow_(sheet, toSupplyOrderRow_(orderData));
+}
+
+function appendProductRequestToSheet_(requestData, config) {
+  const sheet = getOrCreateSheetByName_(config.productRequestSheetName);
+  ensureProductRequestSheetHeader_(sheet);
+  insertRequestRow_(sheet, toProductRequestRow_(requestData));
+}
+
+function getOrCreateSheetByName_(sheetName) {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  if (!spreadsheet) {
+    throw new Error('Active spreadsheet is not available. Use a bound script.');
+  }
+
+  const existing = spreadsheet.getSheetByName(sheetName);
+  if (existing) {
+    return existing;
+  }
+  return spreadsheet.insertSheet(sheetName);
+}
+
+function ensureProductRequestSheetHeader_(sheet) {
+  const headers = [[
+    '希望ID',
+    '登録日時',
+    'LINEユーザーID',
+    '依頼者',
+    '対象回',
+    '希望内容',
+    '画像枚数',
+    '画像URL',
+    'LINE言及',
+    '確認状態',
+    '済'
+  ]];
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, headers[0].length).setValues(headers);
+    sheet.getRange(1, 1, 1, headers[0].length).setFontWeight('bold');
+    return;
+  }
+
+  const first = sheet.getRange(1, 1, 1, headers[0].length).getValues()[0];
+  const same = headers[0].every(function (label, index) {
+    return normalizeTextKey_(first[index]) === label;
+  });
+  if (!same) {
+    sheet.getRange(1, 1, 1, headers[0].length).setValues(headers);
+    sheet.getRange(1, 1, 1, headers[0].length).setFontWeight('bold');
+  }
 }
 
 const DASHBOARD_SHEET_NAME = 'ダッシュボード';
@@ -853,6 +912,109 @@ function normalizeOrderPayload_(rawData) {
   };
 }
 
+function normalizeProductRequestPayload_(rawData) {
+  const data = ensureObject_(rawData, 'data');
+  const userId = toOptionalString_(data.userId, '');
+  const userName = toOptionalString_(data.userName, '未入力');
+  const targetRound = toOptionalString_(data.targetRound, '今回分');
+  const requestText = toOptionalString_(data.requestText, '');
+  const images = normalizeProductImages_(data.images);
+
+  if (!requestText && images.length === 0) {
+    throw new Error('requestText or images is required.');
+  }
+
+  return {
+    userId: userId,
+    userName: userName,
+    targetRound: targetRound,
+    requestText: requestText,
+    images: images
+  };
+}
+
+function normalizeProductImages_(value) {
+  if (value === undefined || value === null || value === '') {
+    return [];
+  }
+  if (!Array.isArray(value)) {
+    throw new Error('images must be an array.');
+  }
+  return value.map(function (item, index) {
+    const image = ensureObject_(item, 'images[' + index + ']');
+    const contentType = toRequiredString_(image.contentType, 'images[' + index + '].contentType');
+    if (contentType.indexOf('image/') !== 0) {
+      throw new Error('images[' + index + '].contentType must start with image/.');
+    }
+    const base64Data = toRequiredString_(image.base64Data, 'images[' + index + '].base64Data');
+    return {
+      contentType: contentType,
+      base64Data: base64Data,
+      fileName: toOptionalString_(image.fileName, 'image_' + (index + 1) + '.jpg')
+    };
+  }).slice(0, 5);
+}
+
+function saveProductRequestImages_(requestId, requestData, config) {
+  if (!requestData.images || requestData.images.length === 0) {
+    return {
+      imageCount: 0,
+      imageUrls: []
+    };
+  }
+
+  const rootFolder = getProductRequestRootFolder_(config);
+  const subFolderName = requestId + '_' + sanitizeDriveName_(requestData.userName);
+  const folder = rootFolder.createFolder(subFolderName);
+  const imageUrls = requestData.images.map(function (image, index) {
+    const blob = Utilities.newBlob(
+      Utilities.base64Decode(image.base64Data),
+      image.contentType,
+      buildProductImageFileName_(index, image.fileName, image.contentType)
+    );
+    const file = folder.createFile(blob);
+    return file.getUrl();
+  });
+
+  return {
+    imageCount: imageUrls.length,
+    imageUrls: imageUrls
+  };
+}
+
+function getProductRequestRootFolder_(config) {
+  if (config.productRequestImageFolderId) {
+    return DriveApp.getFolderById(config.productRequestImageFolderId);
+  }
+
+  const folderName = '商品希望画像';
+  const folders = DriveApp.getFoldersByName(folderName);
+  if (folders.hasNext()) {
+    return folders.next();
+  }
+  return DriveApp.createFolder(folderName);
+}
+
+function buildProductImageFileName_(index, originalName, contentType) {
+  const ext = inferImageExtension_(contentType);
+  const base = sanitizeDriveName_(String(originalName || '').replace(/\.[^.]+$/, '')) || ('image_' + (index + 1));
+  return base + '.' + ext;
+}
+
+function inferImageExtension_(contentType) {
+  if (contentType === 'image/png') return 'png';
+  if (contentType === 'image/webp') return 'webp';
+  return 'jpg';
+}
+
+function sanitizeDriveName_(text) {
+  return String(text || '').replace(/[\\/:*?"<>|]/g, '_').trim() || 'unknown';
+}
+
+function containsLineMention_(text) {
+  return /line|ライン|個人line|退店line|グループline|画像送|写真送/i.test(String(text || ''));
+}
+
 function toShippingRow_(shippingData) {
   return [
     createRequestId_('SHIP'),
@@ -879,6 +1041,23 @@ function toSupplyOrderRow_(orderData) {
     orderData.arrivalDate,
     formatOrderItemsForSheet_(orderData.items),
     orderData.freeNote,
+    false
+  ];
+}
+
+function toProductRequestRow_(requestData) {
+  const imageUrls = requestData.imageUrls || [];
+  return [
+    requestData.requestId,
+    new Date(),
+    requestData.userId,
+    requestData.userName,
+    requestData.targetRound,
+    requestData.requestText,
+    imageUrls.length,
+    imageUrls.join('\n'),
+    containsLineMention_(requestData.requestText),
+    requestData.reviewStatus || '未確認',
     false
   ];
 }
@@ -1056,6 +1235,18 @@ function buildOrderNotificationText_(orderData) {
     '注文内容:',
     orderItemsText,
     '自由記入: ' + freeNoteText
+  ].join('\n');
+}
+
+function buildProductRequestNotificationText_(requestData) {
+  const body = requestData.requestText || '（本文なし）';
+  return [
+    '🧩商品希望が届きました',
+    '依頼者: ' + requestData.userName,
+    '対象回: ' + requestData.targetRound,
+    '画像枚数: ' + String((requestData.imageUrls || []).length),
+    '希望内容:',
+    body
   ].join('\n');
 }
 

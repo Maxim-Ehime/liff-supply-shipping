@@ -28,6 +28,7 @@
         const text = String(value || "");
         const lower = text.toLowerCase();
         if (lower.indexOf("order_form.html") !== -1) return "order";
+        if (lower.indexOf("product_request.html") !== -1) return "product";
         if (lower.indexOf("history.html") !== -1) return "history";
 
         const queryIndex = text.indexOf("?");
@@ -38,6 +39,7 @@
 
       function targetByForm(form) {
         if (form === "order") return "./order_form.html";
+        if (form === "product") return "./product_request.html";
         if (form === "history") return "./history.html";
         return "./index.html";
       }

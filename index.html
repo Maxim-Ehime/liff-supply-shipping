@@ -21,6 +21,9 @@
       if (decodedState.indexOf('order_form.html') !== -1 || decodedState.indexOf('form=order') !== -1 || directForm === 'order') {
         form = 'order';
         formSource = 'url';
+      } else if (decodedState.indexOf('product_request.html') !== -1 || decodedState.indexOf('form=product') !== -1 || directForm === 'product') {
+        form = 'product';
+        formSource = 'url';
       } else if (decodedState.indexOf('history.html') !== -1 || decodedState.indexOf('form=history') !== -1 || directForm === 'history') {
         form = 'history';
         formSource = 'url';
@@ -29,7 +32,7 @@
           const pendingForm = sessionStorage.getItem(PENDING_FORM_KEY);
           const pendingTime = Number(sessionStorage.getItem(PENDING_FORM_TIME_KEY));
           if (
-            (pendingForm === 'order' || pendingForm === 'history') &&
+            (pendingForm === 'order' || pendingForm === 'history' || pendingForm === 'product') &&
             Number.isFinite(pendingTime) &&
             Date.now() - pendingTime < PENDING_FORM_TTL_MS
           ) {
@@ -43,6 +46,8 @@
 
       if (form === 'order') {
         target = './order_form.html';
+      } else if (form === 'product') {
+        target = './product_request.html';
       } else if (form === 'history') {
         target = './history.html';
       }

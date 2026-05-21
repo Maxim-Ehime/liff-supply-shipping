@@ -18,6 +18,27 @@ function doPost(e) {
       return createJsonResponse_({ ok: true, action: action });
     }
 
+    if (action === 'liff_product_request') {
+      const requestData = normalizeProductRequestPayload_(request.data);
+      const requestId = createRequestId_('PRD');
+      const saved = saveProductRequestImages_(requestId, requestData, config);
+      const payload = Object.assign({}, requestData, {
+        requestId: requestId,
+        imageUrls: saved.imageUrls,
+        reviewStatus: saved.imageCount === 0 && containsLineMention_(requestData.requestText)
+          ? '要LINE確認'
+          : '未確認'
+      });
+      appendProductRequestToSheet_(payload, config);
+      pushLineTextMessage_(config, buildProductRequestNotificationText_(payload));
+      return createJsonResponse_({
+        ok: true,
+        action: action,
+        requestId: requestId,
+        imageCount: saved.imageCount
+      });
+    }
+
     if (action === 'liff_history') {
       const historyRequest = normalizeHistoryRequest_(request.data);
       const items = getHistoryItems_(historyRequest, config);

@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>商品希望フォーム</title>
+  <style>
+    body {
+      font-family: -apple-system, "Helvetica Neue", sans-serif;
+      margin: 0;
+      padding: 16px;
+      background: #f4f7f9;
+      color: #333;
+    }
+
+    h3 {
+      margin: 8px 0 12px;
+      text-align: center;
+      color: #0f766e;
+    }
+
+    .notice {
+      background: #ecfeff;
+      border: 1px solid #99f6e4;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 13px;
+      line-height: 1.5;
+      margin-bottom: 14px;
+    }
+
+    .form-group {
+      margin-bottom: 14px;
+    }
+
+    label {
+      display: block;
+      font-size: 14px;
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+
+    input[type="text"],
+    textarea {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid #d6dce3;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 16px;
+      outline: none;
+      background: #fff;
+    }
+
+    textarea {
+      min-height: 140px;
+      resize: vertical;
+      font-family: inherit;
+    }
+
+    .hint {
+      margin-top: 6px;
+      color: #4b5563;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .upload-btn {
+      width: 100%;
+      border: 2px solid #14b8a6;
+      color: #0f766e;
+      background: #fff;
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .thumb-list {
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .thumb-item {
+      background: #fff;
+      border: 1px solid #d6dce3;
+      border-radius: 8px;
+      padding: 6px;
+    }
+
+    .thumb-item img {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      object-fit: cover;
+      border-radius: 6px;
+      display: block;
+    }
+
+    .remove-btn {
+      width: 100%;
+      margin-top: 6px;
+      border: none;
+      border-radius: 6px;
+      padding: 6px;
+      font-size: 12px;
+      background: #fee2e2;
+      color: #b91c1c;
+      cursor: pointer;
+    }
+
+    .submit-btn {
+      width: 100%;
+      border: none;
+      border-radius: 12px;
+      padding: 16px;
+      font-size: 17px;
+      font-weight: bold;
+      background: #14b8a6;
+      color: #fff;
+      cursor: pointer;
+    }
+
+    .submit-btn:disabled {
+      background: #9ca3af;
+      cursor: default;
+    }
+
+    #loading {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(255, 255, 255, 0.82);
+      z-index: 2000;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      color: #0f766e;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="loading">送信中...</div>
+  <h3>🧩 商品希望フォーム</h3>
+
+  <div class="notice">
+    商品希望はこの画面から送信してください。LINEや備品注文の自由記入欄での受付対象外です。
+  </div>
+
+  <div class="form-group">
+    <label>依頼者</label>
+    <input type="text" id="userName" placeholder="氏名を入力">
+  </div>
+
+  <div class="form-group">
+    <label>対象回</label>
+    <input type="text" id="targetRound" value="今回分" placeholder="例: 2026年5月第3便">
+  </div>
+
+  <div class="form-group">
+    <label>希望内容</label>
+    <textarea id="requestText" placeholder="例: 山賊 3袋 DP2枚&#10;クレヨンしんちゃん貯金箱 2袋&#10;隙間があれば400円以下アソート希望"></textarea>
+  </div>
+
+  <div class="form-group">
+    <label>カタログ・希望商品の画像</label>
+    <input id="imageInput" type="file" accept="image/*" multiple style="display:none;">
+    <button id="uploadButton" class="upload-btn" type="button">画像を追加（最大5枚）</button>
+    <div id="thumbList" class="thumb-list"></div>
+    <div class="hint">画像を添付すると、管理側で希望内容の確認がしやすくなります。</div>
+  </div>
+
+  <button id="submitButton" class="submit-btn" type="button">商品希望を送信する</button>
+
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script>
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbz1GRizrjZXu0mQ-N58HgTwWJ55BuG4VteRkP4aPmhuWOaeRJNTejgVZuHRmwpsr4E/exec";
+    const LIFF_ID = "2009819015-Pj5rk2Ru";
+    const USER_NAME_STORAGE_KEY = "requestUserName";
+    const MAX_IMAGES = 5;
+    const MAX_IMAGE_EDGE = 1280;
+    const JPEG_QUALITY = 0.82;
+    let currentProfile = null;
+    let pickedImages = [];
+
+    function rememberPendingLiffForm(form) {
+      try {
+        sessionStorage.setItem('pendingLiffForm', form);
+        sessionStorage.setItem('pendingLiffFormTime', String(Date.now()));
+      } catch (error) {
+        // Ignore storage errors.
+      }
+    }
+
+    function clearPendingLiffForm() {
+      try {
+        sessionStorage.removeItem('pendingLiffForm');
+        sessionStorage.removeItem('pendingLiffFormTime');
+      } catch (error) {
+        // Ignore storage errors.
+      }
+    }
+
+    function getLoginRedirectUri(form) {
+      const url = new URL('./index.html', window.location.href);
+      url.searchParams.set('form', form);
+      return url.href;
+    }
+
+    async function init() {
+      try {
+        await liff.init({ liffId: LIFF_ID });
+        if (!liff.isLoggedIn()) {
+          rememberPendingLiffForm('product');
+          liff.login({ redirectUri: getLoginRedirectUri('product') });
+          return;
+        }
+        clearPendingLiffForm();
+        currentProfile = await liff.getProfile();
+        const savedName = localStorage.getItem(USER_NAME_STORAGE_KEY) || localStorage.getItem('shippingUserName');
+        document.getElementById('userName').value = savedName || currentProfile.displayName;
+      } catch (error) {
+        alert('LIFF初期化に失敗しました: ' + error.message);
+      }
+    }
+
+    async function getCurrentUserId() {
+      if (currentProfile && currentProfile.userId) return currentProfile.userId;
+      if (!liff.isLoggedIn()) {
+        rememberPendingLiffForm('product');
+        liff.login({ redirectUri: getLoginRedirectUri('product') });
+        return '';
+      }
+      currentProfile = await liff.getProfile();
+      return currentProfile.userId || '';
+    }
+
+    function renderThumbnails() {
+      const list = document.getElementById('thumbList');
+      if (pickedImages.length === 0) {
+        list.innerHTML = '';
+        return;
+      }
+      list.innerHTML = pickedImages.map(function (item, index) {
+        return (
+          '<div class="thumb-item">' +
+          '<img src="' + item.previewUrl + '" alt="添付画像' + (index + 1) + '">' +
+          '<button class="remove-btn" data-index="' + index + '" type="button">削除</button>' +
+          '</div>'
+        );
+      }).join('');
+      list.querySelectorAll('.remove-btn').forEach(function (button) {
+        button.addEventListener('click', function () {
+          const index = Number(button.getAttribute('data-index'));
+          if (!Number.isFinite(index)) return;
+          pickedImages.splice(index, 1);
+          renderThumbnails();
+        });
+      });
+    }
+
+    function readFileAsDataUrl(file) {
+      return new Promise(function (resolve, reject) {
+        const reader = new FileReader();
+        reader.onload = function () { resolve(String(reader.result || '')); };
+        reader.onerror = function () { reject(new Error('画像の読込に失敗しました。')); };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function loadImage(dataUrl) {
+      return new Promise(function (resolve, reject) {
+        const image = new Image();
+        image.onload = function () { resolve(image); };
+        image.onerror = function () { reject(new Error('画像の読込に失敗しました。')); };
+        image.src = dataUrl;
+      });
+    }
+
+    function downscaleImageToJpeg(dataUrl) {
+      return loadImage(dataUrl).then(function (image) {
+        const scale = Math.min(1, MAX_IMAGE_EDGE / Math.max(image.width, image.height));
+        const width = Math.max(1, Math.round(image.width * scale));
+        const height = Math.max(1, Math.round(image.height * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(image, 0, 0, width, height);
+        return canvas.toDataURL('image/jpeg', JPEG_QUALITY);
+      });
+    }
+
+    function splitDataUrl(dataUrl) {
+      const marker = ';base64,';
+      const index = dataUrl.indexOf(marker);
+      if (index < 0) {
+        throw new Error('画像形式の変換に失敗しました。');
+      }
+      return {
+        contentType: dataUrl.slice(5, index),
+        base64Data: dataUrl.slice(index + marker.length)
+      };
+    }
+
+    async function addSelectedImages(fileList) {
+      const remain = MAX_IMAGES - pickedImages.length;
+      if (remain <= 0) {
+        alert('画像は最大5枚までです。');
+        return;
+      }
+
+      const files = Array.from(fileList).slice(0, remain);
+      for (let i = 0; i < files.length; i += 1) {
+        const raw = await readFileAsDataUrl(files[i]);
+        const compressed = await downscaleImageToJpeg(raw);
+        const parts = splitDataUrl(compressed);
+        pickedImages.push({
+          fileName: files[i].name || ('image_' + (pickedImages.length + 1) + '.jpg'),
+          contentType: parts.contentType,
+          base64Data: parts.base64Data,
+          previewUrl: compressed
+        });
+      }
+      renderThumbnails();
+    }
+
+    async function submitProductRequest() {
+      const submitButton = document.getElementById('submitButton');
+      const loading = document.getElementById('loading');
+      const userName = document.getElementById('userName').value.trim();
+      const targetRound = document.getElementById('targetRound').value.trim() || '今回分';
+      const requestText = document.getElementById('requestText').value.trim();
+
+      if (!requestText && pickedImages.length === 0) {
+        alert('希望内容または画像を入力してください。');
+        return;
+      }
+
+      const userId = await getCurrentUserId();
+      if (!userId) {
+        alert('LINEユーザー情報の取得に失敗しました。画面を開き直してください。');
+        return;
+      }
+
+      submitButton.disabled = true;
+      loading.style.display = 'flex';
+      try {
+        const response = await fetch(GAS_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({
+            action: 'liff_product_request',
+            data: {
+              userId: userId,
+              userName: userName,
+              targetRound: targetRound,
+              requestText: requestText,
+              images: pickedImages.map(function (image) {
+                return {
+                  fileName: image.fileName,
+                  contentType: image.contentType,
+                  base64Data: image.base64Data
+                };
+              })
+            }
+          })
+        });
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        const payload = await response.json();
+        if (!payload.ok) throw new Error(payload.error || '送信に失敗しました。');
+
+        localStorage.setItem(USER_NAME_STORAGE_KEY, userName);
+        alert('商品希望を送信しました。画像' + String(payload.imageCount || 0) + '枚を添付しました。');
+        liff.closeWindow();
+      } catch (error) {
+        alert('送信エラー: ' + error.message);
+        submitButton.disabled = false;
+        loading.style.display = 'none';
+      }
+    }
+
+    document.getElementById('uploadButton').addEventListener('click', function () {
+      document.getElementById('imageInput').click();
+    });
+    document.getElementById('imageInput').addEventListener('change', async function (event) {
+      try {
+        if (event.target.files && event.target.files.length > 0) {
+          await addSelectedImages(event.target.files);
+        }
+      } catch (error) {
+        alert(error.message || '画像の処理に失敗しました。');
+      } finally {
+        event.target.value = '';
+      }
+    });
+    document.getElementById('submitButton').addEventListener('click', submitProductRequest);
+
+    init();
+  </script>
+</body>
+
+</html>
