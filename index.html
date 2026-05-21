@@ -16,11 +16,14 @@
       const directForm = String(params.get('form') || '').toLowerCase();
       let target = '';
       let form = '';
+      let formSource = '';
 
       if (decodedState.indexOf('order_form.html') !== -1 || decodedState.indexOf('form=order') !== -1 || directForm === 'order') {
         form = 'order';
+        formSource = 'url';
       } else if (decodedState.indexOf('history.html') !== -1 || decodedState.indexOf('form=history') !== -1 || directForm === 'history') {
         form = 'history';
+        formSource = 'url';
       } else {
         try {
           const pendingForm = sessionStorage.getItem(PENDING_FORM_KEY);
@@ -31,6 +34,7 @@
             Date.now() - pendingTime < PENDING_FORM_TTL_MS
           ) {
             form = pendingForm;
+            formSource = 'pending';
           }
         } catch (error) {
           form = '';
@@ -45,8 +49,10 @@
 
       if (target) {
         try {
-          sessionStorage.setItem(PENDING_FORM_KEY, form);
-          sessionStorage.setItem(PENDING_FORM_TIME_KEY, String(Date.now()));
+          if (formSource === 'pending') {
+            sessionStorage.removeItem(PENDING_FORM_KEY);
+            sessionStorage.removeItem(PENDING_FORM_TIME_KEY);
+          }
         } catch (error) {
           // Continue even if sessionStorage is unavailable.
         }

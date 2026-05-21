@@ -406,7 +406,7 @@
         await liff.init({ liffId: LIFF_ID });
         if (!liff.isLoggedIn()) {
           rememberPendingLiffForm('order');
-          liff.login();
+          liff.login({ redirectUri: getLoginRedirectUri('order') });
           return;
         }
         clearPendingLiffForm();
@@ -425,7 +425,7 @@
       }
       if (!liff.isLoggedIn()) {
         rememberPendingLiffForm('order');
-        liff.login();
+        liff.login({ redirectUri: getLoginRedirectUri('order') });
         return '';
       }
       currentProfile = await liff.getProfile();
@@ -448,6 +448,12 @@
       } catch (error) {
         // Ignore storage errors in restricted browser contexts.
       }
+    }
+
+    function getLoginRedirectUri(form) {
+      const url = new URL('./index.html', window.location.href);
+      url.searchParams.set('form', form);
+      return url.href;
     }
 
     window.onload = function () {
