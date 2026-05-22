@@ -93,12 +93,12 @@ const DASHBOARD_SHEET_NAME = 'ダッシュボード';
 const REQUESTER_ORDER_SHEET_NAME = '依頼者順';
 const DASHBOARD_HEADER_ROW = 8;
 const DASHBOARD_DATA_START_ROW = 9;
-const DASHBOARD_COLUMNS = 11;
-const DASHBOARD_META_START_COLUMN = 12;
+const DASHBOARD_COLUMNS = 10;
+const DASHBOARD_META_START_COLUMN = 11;
 const DASHBOARD_META_COLUMNS = 2;
-const DASHBOARD_DONE_COLUMN = 11;
+const DASHBOARD_DONE_COLUMN = 10;
 const DASHBOARD_RENDER_MAX_ROWS = 300;
-const DASHBOARD_DATE_STORE_COLUMN = 14; // N
+const DASHBOARD_DATE_STORE_COLUMN = 13; // M
 const DASHBOARD_DATE_STORE_START_ROW = 3;
 const DASHBOARD_DATE_STORE_MAX_ROWS = 300;
 const DASHBOARD_BUTTON_PROTECTION_DESCRIPTION = 'Dashboard calendar button/display warning';
@@ -108,12 +108,14 @@ const DASHBOARD_STATUS_PENDING = '未完了のみ';
 const DASHBOARD_STATUS_DONE = '完了のみ';
 const DASHBOARD_SOURCE_SHIPPING = '送り依頼';
 const DASHBOARD_SOURCE_SUPPLY = '備品注文';
+const DASHBOARD_SOURCE_PRODUCT = '商品希望';
 const DASHBOARD_TITLE_COLOR = '#12355B';
 const DASHBOARD_HEADER_COLOR = '#1F4E79';
 const DASHBOARD_LABEL_COLOR = '#E8EEF7';
 const DASHBOARD_SUMMARY_COLOR = '#F7F7F7';
-const SHIPPING_DONE_COLUMN = 12;
+const SHIPPING_DONE_COLUMN = 10;
 const SUPPLY_DONE_COLUMN = 8;
+const PRODUCT_DONE_COLUMN = 13;
 const SOURCE_READ_MAX_ROWS = 100;
 const HISTORY_DEFAULT_LIMIT = 50;
 const HISTORY_MAX_LIMIT = 100;
@@ -172,10 +174,24 @@ function syncDashboardDoneToSource(e) {
   }
 
   const sourceSheet = getRequiredSheetByName_(sourceSheetName);
-  const doneColumn = sourceSheetName === DASHBOARD_SOURCE_SHIPPING ? SHIPPING_DONE_COLUMN : SUPPLY_DONE_COLUMN;
+  const doneColumn = getDoneColumnFromHeader_(sourceSheet);
   const done = toDoneBoolean_(e.range.getValue());
   sourceSheet.getRange(sourceRow, doneColumn).setValue(done);
   refreshDashboard();
+}
+
+function getDoneColumnFromHeader_(sheet) {
+  const lastColumn = sheet.getLastColumn();
+  if (lastColumn < 1) {
+    throw new Error('済列が見つかりません: ' + sheet.getName());
+  }
+  const headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
+  for (let index = headers.length - 1; index >= 0; index -= 1) {
+    if (normalizeTextKey_(headers[index]) === '済') {
+      return index + 1;
+    }
+  }
+  throw new Error('済列が見つかりません: ' + sheet.getName());
 }
 
 function supplementRequesterOrder() {
@@ -186,9 +202,10 @@ function supplementRequesterOrder() {
 
   const shippingRows = readShippingRows_(config.masterSheetName);
   const supplyRows = readSupplyRows_(config.supplySheetName);
+  const productRows = readProductRequestRows_(config.productRequestSheetName);
   const namesToAppend = [];
 
-  shippingRows.concat(supplyRows).forEach(function (row) {
+  shippingRows.concat(supplyRows).concat(productRows).forEach(function (row) {
     const name = normalizeTextKey_(row.requester);
     if (!name) {
       return;
@@ -251,9 +268,10 @@ function setupDashboardLayout_(sheet) {
   sheet.getRange('D3').setValue('対象日件数');
   sheet.getRange('D4').setValue('送り依頼');
   sheet.getRange('D5').setValue('備品注文');
-  sheet.getRange('D6').setValue('未完了');
+  sheet.getRange('D6').setValue('商品希望');
+  sheet.getRange('D7').setValue('未完了');
 
-  sheet.getRange('A1:K1')
+  sheet.getRange('A1:J1')
     .setBackground(DASHBOARD_TITLE_COLOR)
     .setFontColor('#FFFFFF')
     .setFontWeight('bold')
@@ -263,11 +281,11 @@ function setupDashboardLayout_(sheet) {
   sheet.getRange('A3:A4')
     .setBackground(DASHBOARD_LABEL_COLOR)
     .setFontColor(DASHBOARD_TITLE_COLOR);
-  sheet.getRange('D3:E6')
+  sheet.getRange('D3:E7')
     .setBackground(DASHBOARD_SUMMARY_COLOR)
     .setFontColor(DASHBOARD_TITLE_COLOR);
   sheet.getRange('A3:A4').setFontWeight('bold');
-  sheet.getRange('D3:D6').setFontWeight('bold');
+  sheet.getRange('D3:D7').setFontWeight('bold');
   sheet.getRange('A3')
     .setHorizontalAlignment('center')
     .setVerticalAlignment('middle')
@@ -288,19 +306,7 @@ function setupDashboardLayout_(sheet) {
     .build();
   sheet.getRange('B4').setDataValidation(statusRule);
 
-  const headers = [[
-    '種別',
-    '依頼者',
-    '希望着日',
-    '送り先/注文内容',
-    '運送会社',
-    '最低CT',
-    '最高CT',
-    '備品注文',
-    '残から',
-    '自由記入',
-    '済'
-  ]];
+  const headers = [getDashboardHeaders_()];
   sheet.getRange(DASHBOARD_HEADER_ROW, 1, 1, DASHBOARD_COLUMNS).setValues(headers);
   formatDashboardTableHeader_(sheet);
 
@@ -310,6 +316,21 @@ function setupDashboardLayout_(sheet) {
   setupDashboardEditWarnings_(sheet);
   sheet.setFrozenRows(DASHBOARD_HEADER_ROW);
   setDashboardColumnWidths_(sheet);
+}
+
+function getDashboardHeaders_() {
+  return [
+    '種別',
+    '依頼者',
+    '希望着日',
+    '内容',
+    '運送会社',
+    '最低CT',
+    '最高CT',
+    '補足/画像',
+    '確認',
+    '済'
+  ];
 }
 
 function ensureRequesterOrderSheet_(sheet) {
@@ -432,7 +453,11 @@ function readRequesterOrder_() {
 }
 
 function readShippingRows_(sheetName) {
-  const sheet = getRequiredSheetByName_(sheetName);
+  const sheet = getExistingSheetByName_(sheetName);
+  if (!sheet) {
+    return [];
+  }
+  ensureShippingSheetHeader_(sheet);
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) {
     return [];
@@ -440,7 +465,6 @@ function readShippingRows_(sheetName) {
   const rowCount = getSourceReadRowCount_(lastRow);
   const values = sheet.getRange(2, 1, rowCount, SHIPPING_DONE_COLUMN).getValues();
   return values.map(function (row, index) {
-    const doneValue = row[11] !== '' ? row[11] : row[9];
     return {
       sourceType: DASHBOARD_SOURCE_SHIPPING,
       requestId: row[0],
@@ -452,10 +476,9 @@ function readShippingRows_(sheetName) {
       summary: row[6],
       minCt: row[7],
       maxCt: row[8],
-      hasSupplies: row[9],
-      hasRemaining: row[10],
-      freeNote: '',
-      done: doneValue,
+      supplement: '',
+      reviewStatus: '',
+      done: row[9],
       sourceSheetName: sheetName,
       sourceRow: index + 2
     };
@@ -463,7 +486,11 @@ function readShippingRows_(sheetName) {
 }
 
 function readSupplyRows_(sheetName) {
-  const sheet = getRequiredSheetByName_(sheetName);
+  const sheet = getExistingSheetByName_(sheetName);
+  if (!sheet) {
+    return [];
+  }
+  ensureSupplyOrderSheetHeader_(sheet);
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) {
     return [];
@@ -483,14 +510,69 @@ function readSupplyRows_(sheetName) {
       summary: row[5],
       minCt: '',
       maxCt: '',
-      hasSupplies: '',
-      hasRemaining: '',
-      freeNote: row[6],
+      supplement: row[6],
+      reviewStatus: '',
       done: doneValue,
       sourceSheetName: sheetName,
       sourceRow: index + 2
     };
   });
+}
+
+function readProductRequestRows_(sheetName) {
+  const sheet = getExistingSheetByName_(sheetName);
+  if (!sheet) {
+    return [];
+  }
+  ensureProductRequestSheetHeader_(sheet);
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) {
+    return [];
+  }
+  const rowCount = getSourceReadRowCount_(lastRow);
+  const values = sheet.getRange(2, 1, rowCount, PRODUCT_DONE_COLUMN).getValues();
+  return values.map(function (row, index) {
+    return {
+      sourceType: DASHBOARD_SOURCE_PRODUCT,
+      requestId: row[0],
+      timestamp: row[1],
+      userId: row[2],
+      requester: row[3],
+      carrier: '',
+      arrivalDate: row[5],
+      summary: row[6],
+      minCt: '',
+      maxCt: '',
+      supplement: formatProductDashboardSupplement_(row[7], row[8], row[10]),
+      reviewStatus: row[11],
+      done: row[12],
+      sourceSheetName: sheetName,
+      sourceRow: index + 2
+    };
+  });
+}
+
+function getExistingSheetByName_(sheetName) {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  if (!spreadsheet) {
+    throw new Error('Active spreadsheet is not available. Use a bound script.');
+  }
+  return spreadsheet.getSheetByName(sheetName);
+}
+
+function formatProductDashboardSupplement_(imageCount, folderUrl, lineMention) {
+  const parts = [];
+  const count = Number(imageCount);
+  if (Number.isFinite(count) && count > 0) {
+    parts.push('画像' + count + '枚');
+  }
+  if (folderUrl) {
+    parts.push(folderUrl);
+  }
+  if (toDoneBoolean_(lineMention)) {
+    parts.push('LINE言及あり');
+  }
+  return parts.join('\n');
 }
 
 function getSourceReadRowCount_(lastRow) {
@@ -500,7 +582,8 @@ function getSourceReadRowCount_(lastRow) {
 function buildDashboardRows_(config, targetDates, statusFilter, requesterOrderMap) {
   const shippingRows = readShippingRows_(config.masterSheetName);
   const supplyRows = readSupplyRows_(config.supplySheetName);
-  const allRows = shippingRows.concat(supplyRows);
+  const productRows = readProductRequestRows_(config.productRequestSheetName);
+  const allRows = shippingRows.concat(supplyRows).concat(productRows);
   const targetMap = {};
   targetDates.forEach(function (dateKey) {
     targetMap[dateKey] = true;
@@ -509,6 +592,7 @@ function buildDashboardRows_(config, targetDates, statusFilter, requesterOrderMa
     total: 0,
     shipping: 0,
     supply: 0,
+    product: 0,
     pending: 0
   };
 
@@ -529,8 +613,10 @@ function buildDashboardRows_(config, targetDates, statusFilter, requesterOrderMa
     summary.total += 1;
     if (row.sourceType === DASHBOARD_SOURCE_SHIPPING) {
       summary.shipping += 1;
-    } else {
+    } else if (row.sourceType === DASHBOARD_SOURCE_SUPPLY) {
       summary.supply += 1;
+    } else if (row.sourceType === DASHBOARD_SOURCE_PRODUCT) {
+      summary.product += 1;
     }
     if (!toDoneBoolean_(row.done)) {
       summary.pending += 1;
@@ -549,8 +635,10 @@ function buildDashboardRows_(config, targetDates, statusFilter, requesterOrderMa
     if (leftName !== rightName) {
       return leftName.localeCompare(rightName, 'ja');
     }
-    if (left.sourceType !== right.sourceType) {
-      return left.sourceType === DASHBOARD_SOURCE_SHIPPING ? -1 : 1;
+    const leftSourceOrder = getDashboardSourceSortOrder_(left.sourceType);
+    const rightSourceOrder = getDashboardSourceSortOrder_(right.sourceType);
+    if (leftSourceOrder !== rightSourceOrder) {
+      return leftSourceOrder - rightSourceOrder;
     }
 
     return toComparableTime_(left.timestamp) - toComparableTime_(right.timestamp);
@@ -565,9 +653,8 @@ function buildDashboardRows_(config, targetDates, statusFilter, requesterOrderMa
       toOptionalString_(row.carrier, ''),
       toOptionalString_(row.minCt, ''),
       toOptionalString_(row.maxCt, ''),
-      toOptionalString_(row.hasSupplies, ''),
-      toOptionalString_(row.hasRemaining, ''),
-      toOptionalString_(row.freeNote, ''),
+      toOptionalString_(row.supplement, ''),
+      toOptionalString_(row.reviewStatus, ''),
       toDoneBoolean_(row.done),
       row.sourceSheetName,
       row.sourceRow
@@ -575,6 +662,13 @@ function buildDashboardRows_(config, targetDates, statusFilter, requesterOrderMa
   });
 
   return { rows: dashboardRows, summary: summary };
+}
+
+function getDashboardSourceSortOrder_(sourceType) {
+  if (sourceType === DASHBOARD_SOURCE_SHIPPING) return 1;
+  if (sourceType === DASHBOARD_SOURCE_SUPPLY) return 2;
+  if (sourceType === DASHBOARD_SOURCE_PRODUCT) return 3;
+  return 99;
 }
 
 function writeDashboardRows_(sheet, rows) {
@@ -589,6 +683,7 @@ function writeDashboardRows_(sheet, rows) {
   metaRange.clearContent();
   sheet.getRange(DASHBOARD_DATA_START_ROW, DASHBOARD_DONE_COLUMN, clearRows, 1).removeCheckboxes();
 
+  sheet.getRange(DASHBOARD_HEADER_ROW, 1, 1, DASHBOARD_COLUMNS).setValues([getDashboardHeaders_()]);
   formatDashboardTableHeader_(sheet);
 
   const rowsToRender = rows.slice(0, DASHBOARD_RENDER_MAX_ROWS);
@@ -619,7 +714,8 @@ function writeDashboardSummary_(sheet, summary) {
   sheet.getRange('E3').setValue(summary.total);
   sheet.getRange('E4').setValue(summary.shipping);
   sheet.getRange('E5').setValue(summary.supply);
-  sheet.getRange('E6').setValue(summary.pending);
+  sheet.getRange('E6').setValue(summary.product);
+  sheet.getRange('E7').setValue(summary.pending);
 }
 
 function formatDashboardTableHeader_(sheet) {
@@ -642,22 +738,20 @@ function formatDashboardDataRows_(sheet, rowCount) {
     .setBorder(true, true, true, true, true, true, '#D9E2EF', SpreadsheetApp.BorderStyle.SOLID);
   sheet.getRange(DASHBOARD_DATA_START_ROW, 1, rowCount, 1).setFontWeight('bold');
   sheet.getRange(DASHBOARD_DATA_START_ROW, 6, rowCount, 2).setHorizontalAlignment('center');
-  sheet.getRange(DASHBOARD_DATA_START_ROW, 8, rowCount, 2).setHorizontalAlignment('center');
-  sheet.getRange(DASHBOARD_DATA_START_ROW, 11, rowCount, 1).setHorizontalAlignment('center');
+  sheet.getRange(DASHBOARD_DATA_START_ROW, 9, rowCount, 2).setHorizontalAlignment('center');
 }
 
 function setDashboardColumnWidths_(sheet) {
   sheet.setColumnWidth(1, 90);
   sheet.setColumnWidth(2, 150);
   sheet.setColumnWidth(3, 105);
-  sheet.setColumnWidth(4, 280);
+  sheet.setColumnWidth(4, 320);
   sheet.setColumnWidth(5, 120);
   sheet.setColumnWidth(6, 70);
   sheet.setColumnWidth(7, 70);
-  sheet.setColumnWidth(8, 80);
-  sheet.setColumnWidth(9, 70);
-  sheet.setColumnWidth(10, 280);
-  sheet.setColumnWidth(11, 55);
+  sheet.setColumnWidth(8, 260);
+  sheet.setColumnWidth(9, 95);
+  sheet.setColumnWidth(10, 55);
 }
 
 function getDashboardWritableRowCount_(sheet) {
@@ -869,9 +963,7 @@ function normalizeShippingPayload_(rawData) {
     arrivalDate: toRequiredString_(data.arrivalDate, 'arrivalDate'),
     destination: toRequiredString_(data.destination, 'destination'),
     minCt: toNonNegativeInteger_(data.minCt, 'minCt'),
-    maxCt: toNonNegativeInteger_(data.maxCt, 'maxCt'),
-    hasSupplies: toOptionalString_(data.hasSupplies, '無'),
-    hasRemaining: toOptionalString_(data.hasRemaining, '無')
+    maxCt: toNonNegativeInteger_(data.maxCt, 'maxCt')
   };
 
   if (normalized.minCt > normalized.maxCt) {
@@ -955,7 +1047,7 @@ function safePushLineTextMessage_(config, messageText) {
 }
 
 function ensureShippingSheetHeader_(sheet) {
-  const headers = [[
+  const headers = [
     '依頼ID',
     '登録日時',
     'LINEユーザーID',
@@ -965,11 +1057,10 @@ function ensureShippingSheetHeader_(sheet) {
     '送り先',
     '最低CT',
     '最高CT',
-    '備品注文',
-    '残から',
     '済'
-  ]];
-  ensureSheetHeaderRow_(sheet, headers[0]);
+  ];
+  migrateLegacyShippingColumns_(sheet);
+  ensureExactSheetHeaderRow_(sheet, headers);
 }
 
 function ensureSupplyOrderSheetHeader_(sheet) {
@@ -1000,6 +1091,29 @@ function ensureSheetHeaderRow_(sheet, headerRow) {
   if (blank) {
     sheet.getRange(1, 1, 1, headerRow.length).setValues([headerRow]);
     sheet.getRange(1, 1, 1, headerRow.length).setFontWeight('bold');
+  }
+}
+
+function ensureExactSheetHeaderRow_(sheet, headerRow) {
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, headerRow.length).setValues([headerRow]);
+    sheet.getRange(1, 1, 1, headerRow.length).setFontWeight('bold');
+    return;
+  }
+
+  sheet.getRange(1, 1, 1, headerRow.length).setValues([headerRow]);
+  sheet.getRange(1, 1, 1, headerRow.length).setFontWeight('bold');
+}
+
+function migrateLegacyShippingColumns_(sheet) {
+  if (sheet.getLastColumn() < 12 || sheet.getLastRow() < 1) {
+    return;
+  }
+  const headers = sheet.getRange(1, 1, 1, 12).getValues()[0].map(function (value) {
+    return normalizeTextKey_(value);
+  });
+  if (headers[9] === '備品注文' && headers[10] === '残から' && headers[11] === '済') {
+    sheet.deleteColumns(10, 2);
   }
 }
 
@@ -1195,8 +1309,6 @@ function toShippingRow_(shippingData) {
     shippingData.destination,
     shippingData.minCt,
     shippingData.maxCt,
-    shippingData.hasSupplies,
-    shippingData.hasRemaining,
     false
   ];
 }
@@ -1279,9 +1391,7 @@ function getHistoryItems_(requestData, config) {
       summary: row.summary,
       detailText: [
         toOptionalString_(row.carrier, '未選択'),
-        toOptionalString_(row.minCt, '') + '-' + toOptionalString_(row.maxCt, '') + 'CT',
-        '備品注文: ' + toOptionalString_(row.hasSupplies, '無'),
-        '残から: ' + toOptionalString_(row.hasRemaining, '無')
+        toOptionalString_(row.minCt, '') + '-' + toOptionalString_(row.maxCt, '') + 'CT'
       ].join(' / '),
       done: toDoneBoolean_(row.done)
     };
@@ -1387,9 +1497,7 @@ function buildShippingNotificationText_(shippingData) {
     '希望着日: ' + shippingData.arrivalDate,
     '送り先: ' + shippingData.destination,
     '最低カートン: ' + shippingData.minCt,
-    '最高カートン: ' + shippingData.maxCt,
-    '備品注文: ' + shippingData.hasSupplies,
-    '残から: ' + shippingData.hasRemaining
+    '最高カートン: ' + shippingData.maxCt
   ].join('\n');
 }
 

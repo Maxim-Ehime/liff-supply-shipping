@@ -316,30 +316,6 @@
     </div>
   </div>
 
-  <div class="form-group">
-    <label>備品注文の有無</label>
-    <div class="radio-group">
-      <label class="radio-label">
-        <input type="radio" name="hasSupplies" value="無" checked> 無し
-      </label>
-      <label class="radio-label">
-        <input type="radio" name="hasSupplies" value="有"> 有り
-      </label>
-    </div>
-  </div>
-
-  <div class="form-group">
-    <label>残からの有無</label>
-    <div class="radio-group">
-      <label class="radio-label">
-        <input type="radio" name="hasRemaining" value="無" checked> 無し
-      </label>
-      <label class="radio-label">
-        <input type="radio" name="hasRemaining" value="有"> 有り
-      </label>
-    </div>
-  </div>
-
   <button class="submit-btn" onclick="submitShipping()">依頼を送信する</button>
 
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
@@ -390,8 +366,6 @@
     async function submitShipping() {
       const btn = document.querySelector('.submit-btn');
 
-      const hasSupplies = document.querySelector('input[name="hasSupplies"]:checked').value;
-      const hasRemaining = document.querySelector('input[name="hasRemaining"]:checked').value;
       const carrier = document.getElementById('carrier').value || '未選択';
       const minCt = Number(document.getElementById('minCt').value);
       const maxCt = Number(document.getElementById('maxCt').value);
@@ -404,9 +378,7 @@
         arrivalDate: document.getElementById('arrivalDate').value,
         destination: document.getElementById('destination').value || "未入力",
         minCt: minCt,
-        maxCt: maxCt,
-        hasSupplies: hasSupplies,
-        hasRemaining: hasRemaining
+        maxCt: maxCt
       };
 
       if (!data.arrivalDate) { alert("「希望着日」を選択してください。"); return; }
