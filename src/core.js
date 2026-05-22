@@ -27,65 +27,18 @@ function getOptionalScriptProperty_(key, fallback) {
 }
 
 function appendShippingToSheet_(shippingData, config) {
-  const sheet = getOrCreateSheetByName_(config.masterSheetName);
-  ensureShippingSheetHeader_(sheet);
+  const sheet = getRequiredSheetByName_(config.masterSheetName);
   insertRequestRow_(sheet, toShippingRow_(shippingData));
 }
 
 function appendSupplyOrderToSheet_(orderData, config) {
-  const sheet = getOrCreateSheetByName_(config.supplySheetName);
-  ensureSupplyOrderSheetHeader_(sheet);
+  const sheet = getRequiredSheetByName_(config.supplySheetName);
   insertRequestRow_(sheet, toSupplyOrderRow_(orderData));
 }
 
 function appendProductRequestToSheet_(requestData, config) {
-  const sheet = getOrCreateSheetByName_(config.productRequestSheetName);
-  ensureProductRequestSheetHeader_(sheet);
+  const sheet = getRequiredSheetByName_(config.productRequestSheetName);
   insertRequestRow_(sheet, toProductRequestRow_(requestData));
-}
-
-function getOrCreateSheetByName_(sheetName) {
-  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  if (!spreadsheet) {
-    throw new Error('Active spreadsheet is not available. Use a bound script.');
-  }
-
-  const existing = spreadsheet.getSheetByName(sheetName);
-  if (existing) {
-    return existing;
-  }
-  return spreadsheet.insertSheet(sheetName);
-}
-
-function ensureProductRequestSheetHeader_(sheet) {
-  const headers = [[
-    '希望ID',
-    '登録日時',
-    'LINEユーザーID',
-    '依頼者',
-    '希望着日',
-    '希望内容',
-    '画像枚数',
-    '画像フォルダURL',
-    '画像URL',
-    'LINE言及',
-    '確認状態',
-    '済'
-  ]];
-  if (sheet.getLastRow() === 0) {
-    sheet.getRange(1, 1, 1, headers[0].length).setValues(headers);
-    sheet.getRange(1, 1, 1, headers[0].length).setFontWeight('bold');
-    return;
-  }
-
-  const first = sheet.getRange(1, 1, 1, headers[0].length).getValues()[0];
-  const same = headers[0].every(function (label, index) {
-    return normalizeTextKey_(first[index]) === label;
-  });
-  if (!same) {
-    sheet.getRange(1, 1, 1, headers[0].length).setValues(headers);
-    sheet.getRange(1, 1, 1, headers[0].length).setFontWeight('bold');
-  }
 }
 
 const DASHBOARD_SHEET_NAME = 'ダッシュボード';
@@ -114,7 +67,7 @@ const DASHBOARD_LABEL_COLOR = '#E8EEF7';
 const DASHBOARD_SUMMARY_COLOR = '#F7F7F7';
 const SHIPPING_DONE_COLUMN = 10;
 const SUPPLY_DONE_COLUMN = 8;
-const PRODUCT_DONE_COLUMN = 12;
+const PRODUCT_DONE_COLUMN = 10;
 const SOURCE_READ_MAX_ROWS = 100;
 const HISTORY_DEFAULT_LIMIT = 50;
 const HISTORY_MAX_LIMIT = 100;
@@ -456,7 +409,6 @@ function readShippingRows_(sheetName) {
   if (!sheet) {
     return [];
   }
-  ensureShippingSheetHeader_(sheet);
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) {
     return [];
@@ -489,7 +441,6 @@ function readSupplyRows_(sheetName) {
   if (!sheet) {
     return [];
   }
-  ensureSupplyOrderSheetHeader_(sheet);
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) {
     return [];
@@ -523,7 +474,6 @@ function readProductRequestRows_(sheetName) {
   if (!sheet) {
     return [];
   }
-  ensureProductRequestSheetHeader_(sheet);
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) {
     return [];
@@ -542,9 +492,9 @@ function readProductRequestRows_(sheetName) {
       summary: row[5],
       minCt: '',
       maxCt: '',
-      supplement: formatProductDashboardSupplement_(row[6], row[7], row[9]),
-      reviewStatus: row[10],
-      done: row[11],
+      supplement: formatProductDashboardSupplement_(row[6], row[7]),
+      reviewStatus: '',
+      done: row[9],
       sourceSheetName: sheetName,
       sourceRow: index + 2
     };
@@ -559,7 +509,7 @@ function getExistingSheetByName_(sheetName) {
   return spreadsheet.getSheetByName(sheetName);
 }
 
-function formatProductDashboardSupplement_(imageCount, folderUrl, lineMention) {
+function formatProductDashboardSupplement_(imageCount, folderUrl) {
   const parts = [];
   const count = Number(imageCount);
   if (Number.isFinite(count) && count > 0) {
@@ -567,9 +517,6 @@ function formatProductDashboardSupplement_(imageCount, folderUrl, lineMention) {
   }
   if (folderUrl) {
     parts.push(folderUrl);
-  }
-  if (toDoneBoolean_(lineMention)) {
-    parts.push('LINE言及あり');
   }
   return parts.join('\n');
 }
@@ -1043,77 +990,6 @@ function safePushLineTextMessage_(config, messageText) {
   }
 }
 
-function ensureShippingSheetHeader_(sheet) {
-  const headers = [
-    '依頼ID',
-    '登録日時',
-    'LINEユーザーID',
-    '依頼者',
-    '運送会社',
-    '希望着日',
-    '送り先',
-    '最低CT',
-    '最高CT',
-    '済'
-  ];
-  migrateLegacyShippingColumns_(sheet);
-  ensureExactSheetHeaderRow_(sheet, headers);
-}
-
-function ensureSupplyOrderSheetHeader_(sheet) {
-  const headers = [[
-    '依頼ID',
-    '登録日時',
-    'LINEユーザーID',
-    '依頼者',
-    '希望着日',
-    '注文内容',
-    '自由記入',
-    '済'
-  ]];
-  ensureSheetHeaderRow_(sheet, headers[0]);
-}
-
-function ensureSheetHeaderRow_(sheet, headerRow) {
-  if (sheet.getLastRow() === 0) {
-    sheet.getRange(1, 1, 1, headerRow.length).setValues([headerRow]);
-    sheet.getRange(1, 1, 1, headerRow.length).setFontWeight('bold');
-    return;
-  }
-
-  const first = sheet.getRange(1, 1, 1, headerRow.length).getValues()[0];
-  const blank = first.every(function (cell) {
-    return normalizeTextKey_(cell) === '';
-  });
-  if (blank) {
-    sheet.getRange(1, 1, 1, headerRow.length).setValues([headerRow]);
-    sheet.getRange(1, 1, 1, headerRow.length).setFontWeight('bold');
-  }
-}
-
-function ensureExactSheetHeaderRow_(sheet, headerRow) {
-  if (sheet.getLastRow() === 0) {
-    sheet.getRange(1, 1, 1, headerRow.length).setValues([headerRow]);
-    sheet.getRange(1, 1, 1, headerRow.length).setFontWeight('bold');
-    return;
-  }
-
-  sheet.getRange(1, 1, 1, headerRow.length).setValues([headerRow]);
-  sheet.getRange(1, 1, 1, headerRow.length).setFontWeight('bold');
-}
-
-function migrateLegacyShippingColumns_(sheet) {
-  if (sheet.getLastColumn() < 12 || sheet.getLastRow() < 1) {
-    return;
-  }
-  const headers = sheet.getRange(1, 1, 1, 12).getValues()[0].map(function (value) {
-    return normalizeTextKey_(value);
-  });
-  if (headers[9] === '備品注文' && headers[10] === '残から' && headers[11] === '済') {
-    sheet.deleteColumns(10, 2);
-  }
-}
-
 function normalizeProductImages_(value) {
   if (value === undefined || value === null || value === '') {
     return [];
@@ -1291,10 +1167,6 @@ function sanitizeDriveName_(text) {
   return String(text || '').replace(/[\\/:*?"<>|]/g, '_').trim() || 'unknown';
 }
 
-function containsLineMention_(text) {
-  return /line|ライン|個人line|退店line|グループline|画像送|写真送/i.test(String(text || ''));
-}
-
 function toShippingRow_(shippingData) {
   return [
     createRequestId_('SHIP'),
@@ -1335,8 +1207,6 @@ function toProductRequestRow_(requestData) {
     imageUrls.length,
     requestData.imageFolderUrl || '',
     imageUrls.join('\n'),
-    containsLineMention_(requestData.requestText),
-    requestData.reviewStatus || '未確認',
     false
   ];
 }
@@ -1400,7 +1270,7 @@ function getHistoryItems_(requestData, config) {
       requestedAt: row.timestamp,
       arrivalDate: row.arrivalDate,
       summary: row.summary,
-      detailText: '自由記入: ' + toOptionalString_(row.freeNote, '（なし）'),
+      detailText: '自由記入: ' + toOptionalString_(row.supplement, '（なし）'),
       done: toDoneBoolean_(row.done)
     };
   });

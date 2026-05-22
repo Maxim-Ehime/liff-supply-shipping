@@ -25,10 +25,7 @@ function doPost(e) {
       const payload = Object.assign({}, requestData, {
         requestId: requestId,
         imageUrls: saved.imageUrls,
-        imageFolderUrl: saved.folderUrl,
-        reviewStatus: saved.imageCount === 0 && containsLineMention_(requestData.requestText)
-          ? '要LINE確認'
-          : '未確認'
+        imageFolderUrl: saved.folderUrl
       });
       appendProductRequestToSheet_(payload, config);
       const notification = safePushLineTextMessage_(config, buildProductRequestNotificationText_(payload));
