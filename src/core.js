@@ -473,6 +473,12 @@ function buildDashboardRows_(config, targetDates, statusFilter, requesterOrderMa
   });
 
   filteredRows.sort(function (left, right) {
+    const leftDate = normalizeDateKey_(left.arrivalDate);
+    const rightDate = normalizeDateKey_(right.arrivalDate);
+    if (leftDate !== rightDate) {
+      return leftDate.localeCompare(rightDate);
+    }
+
     const leftName = normalizeTextKey_(left.requester);
     const rightName = normalizeTextKey_(right.requester);
     const leftOrder = requesterOrderMap.hasOwnProperty(leftName) ? requesterOrderMap[leftName] : Number.MAX_SAFE_INTEGER;
