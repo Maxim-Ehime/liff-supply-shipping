@@ -63,7 +63,6 @@ function ensureProductRequestSheetHeader_(sheet) {
     '登録日時',
     'LINEユーザーID',
     '依頼者',
-    '対象回',
     '希望着日',
     '希望内容',
     '画像枚数',
@@ -115,7 +114,7 @@ const DASHBOARD_LABEL_COLOR = '#E8EEF7';
 const DASHBOARD_SUMMARY_COLOR = '#F7F7F7';
 const SHIPPING_DONE_COLUMN = 10;
 const SUPPLY_DONE_COLUMN = 8;
-const PRODUCT_DONE_COLUMN = 13;
+const PRODUCT_DONE_COLUMN = 12;
 const SOURCE_READ_MAX_ROWS = 100;
 const HISTORY_DEFAULT_LIMIT = 50;
 const HISTORY_MAX_LIMIT = 100;
@@ -539,13 +538,13 @@ function readProductRequestRows_(sheetName) {
       userId: row[2],
       requester: row[3],
       carrier: '',
-      arrivalDate: row[5],
-      summary: row[6],
+      arrivalDate: row[4],
+      summary: row[5],
       minCt: '',
       maxCt: '',
-      supplement: formatProductDashboardSupplement_(row[7], row[8], row[10]),
-      reviewStatus: row[11],
-      done: row[12],
+      supplement: formatProductDashboardSupplement_(row[6], row[7], row[9]),
+      reviewStatus: row[10],
+      done: row[11],
       sourceSheetName: sheetName,
       sourceRow: index + 2
     };
@@ -1014,7 +1013,6 @@ function normalizeProductRequestPayload_(rawData) {
   const data = ensureObject_(rawData, 'data');
   const userId = toOptionalString_(data.userId, '');
   const userName = toOptionalString_(data.userName, '未入力');
-  const targetRound = toOptionalString_(data.targetRound, '今回分');
   const arrivalDate = toRequiredString_(data.arrivalDate, 'arrivalDate');
   const requestText = toOptionalString_(data.requestText, '');
   const images = normalizeProductImages_(data.images);
@@ -1026,7 +1024,6 @@ function normalizeProductRequestPayload_(rawData) {
   return {
     userId: userId,
     userName: userName,
-    targetRound: targetRound,
     arrivalDate: arrivalDate,
     requestText: requestText,
     images: images
@@ -1333,7 +1330,6 @@ function toProductRequestRow_(requestData) {
     new Date(),
     requestData.userId,
     requestData.userName,
-    requestData.targetRound,
     requestData.arrivalDate,
     requestData.requestText,
     imageUrls.length,
@@ -1522,7 +1518,6 @@ function buildProductRequestNotificationText_(requestData) {
   return [
     '🧩商品希望が届きました',
     '依頼者: ' + requestData.userName,
-    '対象回: ' + requestData.targetRound,
     '希望着日: ' + requestData.arrivalDate,
     '画像枚数: ' + String((requestData.imageUrls || []).length),
     '希望内容:',
