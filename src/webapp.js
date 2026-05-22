@@ -7,15 +7,15 @@ function doPost(e) {
     if (action === 'liff_shipping') {
       const shippingData = normalizeShippingPayload_(request.data);
       appendShippingToSheet_(shippingData, config);
-      pushLineTextMessage_(config, buildShippingNotificationText_(shippingData));
-      return createJsonResponse_({ ok: true, action: action });
+      const notification = safePushLineTextMessage_(config, buildShippingNotificationText_(shippingData));
+      return createJsonResponse_({ ok: true, action: action, notification: notification });
     }
 
     if (action === 'liff_order') {
       const orderData = normalizeOrderPayload_(request.data);
       appendSupplyOrderToSheet_(orderData, config);
-      pushLineTextMessage_(config, buildOrderNotificationText_(orderData));
-      return createJsonResponse_({ ok: true, action: action });
+      const notification = safePushLineTextMessage_(config, buildOrderNotificationText_(orderData));
+      return createJsonResponse_({ ok: true, action: action, notification: notification });
     }
 
     if (action === 'liff_product_request') {
@@ -25,17 +25,19 @@ function doPost(e) {
       const payload = Object.assign({}, requestData, {
         requestId: requestId,
         imageUrls: saved.imageUrls,
+        imageFolderUrl: saved.folderUrl,
         reviewStatus: saved.imageCount === 0 && containsLineMention_(requestData.requestText)
           ? '要LINE確認'
           : '未確認'
       });
       appendProductRequestToSheet_(payload, config);
-      pushLineTextMessage_(config, buildProductRequestNotificationText_(payload));
+      const notification = safePushLineTextMessage_(config, buildProductRequestNotificationText_(payload));
       return createJsonResponse_({
         ok: true,
         action: action,
         requestId: requestId,
-        imageCount: saved.imageCount
+        imageCount: saved.imageCount,
+        notification: notification
       });
     }
 
@@ -65,6 +67,9 @@ function onOpen() {
     .addItem('初期作成', 'setupDashboard')
     .addItem('更新', 'refreshDashboard')
     .addItem('依頼者順を補完', 'supplementRequesterOrder')
+    .addSeparator()
+    .addItem('商品希望画像を整理', 'cleanupOldProductRequestImageFolders')
+    .addItem('商品希望画像の自動整理を設定', 'installProductImageCleanupTrigger')
     .addToUi();
 }
 

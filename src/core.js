@@ -27,12 +27,14 @@ function getOptionalScriptProperty_(key, fallback) {
 }
 
 function appendShippingToSheet_(shippingData, config) {
-  const sheet = getRequiredSheetByName_(config.masterSheetName);
+  const sheet = getOrCreateSheetByName_(config.masterSheetName);
+  ensureShippingSheetHeader_(sheet);
   insertRequestRow_(sheet, toShippingRow_(shippingData));
 }
 
 function appendSupplyOrderToSheet_(orderData, config) {
-  const sheet = getRequiredSheetByName_(config.supplySheetName);
+  const sheet = getOrCreateSheetByName_(config.supplySheetName);
+  ensureSupplyOrderSheetHeader_(sheet);
   insertRequestRow_(sheet, toSupplyOrderRow_(orderData));
 }
 
@@ -62,8 +64,10 @@ function ensureProductRequestSheetHeader_(sheet) {
     'LINEユーザーID',
     '依頼者',
     '対象回',
+    '希望着日',
     '希望内容',
     '画像枚数',
+    '画像フォルダURL',
     '画像URL',
     'LINE言及',
     '確認状態',
@@ -113,6 +117,8 @@ const SUPPLY_DONE_COLUMN = 8;
 const SOURCE_READ_MAX_ROWS = 100;
 const HISTORY_DEFAULT_LIMIT = 50;
 const HISTORY_MAX_LIMIT = 100;
+const PRODUCT_IMAGE_TRASH_DAYS = 14;
+const PRODUCT_IMAGE_DELETE_DAYS = 30;
 
 function setupDashboard() {
   const config = getAppConfig_();
@@ -917,6 +923,7 @@ function normalizeProductRequestPayload_(rawData) {
   const userId = toOptionalString_(data.userId, '');
   const userName = toOptionalString_(data.userName, '未入力');
   const targetRound = toOptionalString_(data.targetRound, '今回分');
+  const arrivalDate = toRequiredString_(data.arrivalDate, 'arrivalDate');
   const requestText = toOptionalString_(data.requestText, '');
   const images = normalizeProductImages_(data.images);
 
@@ -928,9 +935,72 @@ function normalizeProductRequestPayload_(rawData) {
     userId: userId,
     userName: userName,
     targetRound: targetRound,
+    arrivalDate: arrivalDate,
     requestText: requestText,
     images: images
   };
+}
+
+function safePushLineTextMessage_(config, messageText) {
+  try {
+    pushLineTextMessage_(config, messageText);
+    return { ok: true };
+  } catch (error) {
+    Logger.log('LINE notification failed: ' + toErrorMessage_(error));
+    return {
+      ok: false,
+      error: toErrorMessage_(error)
+    };
+  }
+}
+
+function ensureShippingSheetHeader_(sheet) {
+  const headers = [[
+    '依頼ID',
+    '登録日時',
+    'LINEユーザーID',
+    '依頼者',
+    '運送会社',
+    '希望着日',
+    '送り先',
+    '最低CT',
+    '最高CT',
+    '備品注文',
+    '残から',
+    '済'
+  ]];
+  ensureSheetHeaderRow_(sheet, headers[0]);
+}
+
+function ensureSupplyOrderSheetHeader_(sheet) {
+  const headers = [[
+    '依頼ID',
+    '登録日時',
+    'LINEユーザーID',
+    '依頼者',
+    '希望着日',
+    '注文内容',
+    '自由記入',
+    '済'
+  ]];
+  ensureSheetHeaderRow_(sheet, headers[0]);
+}
+
+function ensureSheetHeaderRow_(sheet, headerRow) {
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, headerRow.length).setValues([headerRow]);
+    sheet.getRange(1, 1, 1, headerRow.length).setFontWeight('bold');
+    return;
+  }
+
+  const first = sheet.getRange(1, 1, 1, headerRow.length).getValues()[0];
+  const blank = first.every(function (cell) {
+    return normalizeTextKey_(cell) === '';
+  });
+  if (blank) {
+    sheet.getRange(1, 1, 1, headerRow.length).setValues([headerRow]);
+    sheet.getRange(1, 1, 1, headerRow.length).setFontWeight('bold');
+  }
 }
 
 function normalizeProductImages_(value) {
@@ -959,18 +1029,21 @@ function saveProductRequestImages_(requestId, requestData, config) {
   if (!requestData.images || requestData.images.length === 0) {
     return {
       imageCount: 0,
-      imageUrls: []
+      imageUrls: [],
+      folderUrl: ''
     };
   }
 
   const rootFolder = getProductRequestRootFolder_(config);
-  const subFolderName = requestId + '_' + sanitizeDriveName_(requestData.userName);
-  const folder = rootFolder.createFolder(subFolderName);
+  const dateFolder = getOrCreateChildFolder_(rootFolder, normalizeDateKey_(requestData.arrivalDate));
+  const userFolder = getOrCreateChildFolder_(dateFolder, sanitizeDriveName_(requestData.userName));
+  const folder = userFolder.createFolder(requestId);
+  const timestamp = Utilities.formatDate(new Date(), getSpreadsheetTimeZone_(), 'yyyyMMdd-HHmmss');
   const imageUrls = requestData.images.map(function (image, index) {
     const blob = Utilities.newBlob(
       Utilities.base64Decode(image.base64Data),
       image.contentType,
-      buildProductImageFileName_(index, image.fileName, image.contentType)
+      buildProductImageFileName_(timestamp, index, image.contentType)
     );
     const file = folder.createFile(blob);
     return file.getUrl();
@@ -978,7 +1051,8 @@ function saveProductRequestImages_(requestId, requestData, config) {
 
   return {
     imageCount: imageUrls.length,
-    imageUrls: imageUrls
+    imageUrls: imageUrls,
+    folderUrl: folder.getUrl()
   };
 }
 
@@ -995,10 +1069,105 @@ function getProductRequestRootFolder_(config) {
   return DriveApp.createFolder(folderName);
 }
 
-function buildProductImageFileName_(index, originalName, contentType) {
+function cleanupOldProductRequestImageFolders() {
+  const config = getAppConfig_();
+  const rootFolder = getProductRequestRootFolder_(config);
+  const trashThreshold = getCleanupThresholdDate_(PRODUCT_IMAGE_TRASH_DAYS);
+  const deleteThreshold = getCleanupThresholdDate_(PRODUCT_IMAGE_DELETE_DAYS);
+
+  const folders = rootFolder.getFolders();
+  let trashedCount = 0;
+  while (folders.hasNext()) {
+    const folder = folders.next();
+    const folderDate = parseDateKey_(folder.getName());
+    if (!folderDate) {
+      continue;
+    }
+    folderDate.setHours(0, 0, 0, 0);
+    if (folderDate.getTime() < trashThreshold.getTime()) {
+      folder.setTrashed(true);
+      trashedCount += 1;
+    }
+  }
+
+  const deletedCount = deleteTrashedProductRequestDateFolders_(rootFolder.getId(), deleteThreshold);
+  const result = {
+    trashed: trashedCount,
+    deleted: deletedCount
+  };
+  Logger.log('Product image cleanup result: ' + JSON.stringify(result));
+  return result;
+}
+
+function getCleanupThresholdDate_(days) {
+  const threshold = new Date();
+  threshold.setHours(0, 0, 0, 0);
+  threshold.setDate(threshold.getDate() - days);
+  return threshold;
+}
+
+function deleteTrashedProductRequestDateFolders_(rootFolderId, deleteThreshold) {
+  let deletedCount = 0;
+  let pageToken = null;
+  const query = [
+    "'" + rootFolderId + "' in parents",
+    "mimeType = 'application/vnd.google-apps.folder'",
+    "trashed = true"
+  ].join(' and ');
+
+  do {
+    const response = Drive.Files.list({
+      q: query,
+      maxResults: 100,
+      pageToken: pageToken
+    });
+    const items = response.items || [];
+    items.forEach(function (item) {
+      const folderDate = parseDateKey_(item.title);
+      if (!folderDate) {
+        return;
+      }
+      folderDate.setHours(0, 0, 0, 0);
+      if (folderDate.getTime() < deleteThreshold.getTime()) {
+        Drive.Files.remove(item.id);
+        deletedCount += 1;
+      }
+    });
+    pageToken = response.nextPageToken;
+  } while (pageToken);
+
+  return deletedCount;
+}
+
+function installProductImageCleanupTrigger() {
+  removeProductImageCleanupTriggers_();
+  ScriptApp.newTrigger('cleanupOldProductRequestImageFolders')
+    .timeBased()
+    .everyDays(1)
+    .atHour(3)
+    .create();
+}
+
+function removeProductImageCleanupTriggers_() {
+  ScriptApp.getProjectTriggers().forEach(function (trigger) {
+    if (trigger.getHandlerFunction() === 'cleanupOldProductRequestImageFolders') {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+}
+
+function getOrCreateChildFolder_(parentFolder, folderName) {
+  const safeName = sanitizeDriveName_(folderName);
+  const folders = parentFolder.getFoldersByName(safeName);
+  if (folders.hasNext()) {
+    return folders.next();
+  }
+  return parentFolder.createFolder(safeName);
+}
+
+function buildProductImageFileName_(timestamp, index, contentType) {
   const ext = inferImageExtension_(contentType);
-  const base = sanitizeDriveName_(String(originalName || '').replace(/\.[^.]+$/, '')) || ('image_' + (index + 1));
-  return base + '.' + ext;
+  return timestamp + '_' + String(index + 1).padStart(2, '0') + '.' + ext;
 }
 
 function inferImageExtension_(contentType) {
@@ -1053,8 +1222,10 @@ function toProductRequestRow_(requestData) {
     requestData.userId,
     requestData.userName,
     requestData.targetRound,
+    requestData.arrivalDate,
     requestData.requestText,
     imageUrls.length,
+    requestData.imageFolderUrl || '',
     imageUrls.join('\n'),
     containsLineMention_(requestData.requestText),
     requestData.reviewStatus || '未確認',
@@ -1244,6 +1415,7 @@ function buildProductRequestNotificationText_(requestData) {
     '🧩商品希望が届きました',
     '依頼者: ' + requestData.userName,
     '対象回: ' + requestData.targetRound,
+    '希望着日: ' + requestData.arrivalDate,
     '画像枚数: ' + String((requestData.imageUrls || []).length),
     '希望内容:',
     body

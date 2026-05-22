@@ -41,7 +41,18 @@
       margin-bottom: 8px;
     }
 
+    .required-badge {
+      background: #ff4d4f;
+      color: white;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      margin-left: 8px;
+      vertical-align: middle;
+    }
+
     input[type="text"],
+    input[type="date"],
     textarea {
       width: 100%;
       box-sizing: border-box;
@@ -162,6 +173,11 @@
   </div>
 
   <div class="form-group">
+    <label>希望着日<span class="required-badge">必須</span></label>
+    <input type="date" id="arrivalDate">
+  </div>
+
+  <div class="form-group">
     <label>希望内容</label>
     <textarea id="requestText" placeholder="例: 山賊 3袋 DP2枚&#10;クレヨンしんちゃん貯金箱 2袋&#10;隙間があれば400円以下アソート希望"></textarea>
   </div>
@@ -177,9 +193,10 @@
   <button id="submitButton" class="submit-btn" type="button">商品希望を送信する</button>
 
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="./app_config.js"></script>
   <script>
-    const GAS_URL = "https://script.google.com/macros/s/AKfycbz1GRizrjZXu0mQ-N58HgTwWJ55BuG4VteRkP4aPmhuWOaeRJNTejgVZuHRmwpsr4E/exec";
-    const LIFF_ID = "2009819015-Pj5rk2Ru";
+    const GAS_URL = window.APP_CONFIG.GAS_URL;
+    const LIFF_ID = window.APP_CONFIG.LIFF_ID;
     const USER_NAME_STORAGE_KEY = "requestUserName";
     const MAX_IMAGES = 5;
     const MAX_IMAGE_EDGE = 1280;
@@ -334,10 +351,15 @@
       const loading = document.getElementById('loading');
       const userName = document.getElementById('userName').value.trim();
       const targetRound = document.getElementById('targetRound').value.trim() || '今回分';
+      const arrivalDate = document.getElementById('arrivalDate').value;
       const requestText = document.getElementById('requestText').value.trim();
 
       if (!requestText && pickedImages.length === 0) {
         alert('希望内容または画像を入力してください。');
+        return;
+      }
+      if (!arrivalDate) {
+        alert('希望着日を選択してください。');
         return;
       }
 
@@ -359,6 +381,7 @@
               userId: userId,
               userName: userName,
               targetRound: targetRound,
+              arrivalDate: arrivalDate,
               requestText: requestText,
               images: pickedImages.map(function (image) {
                 return {
@@ -375,7 +398,10 @@
         if (!payload.ok) throw new Error(payload.error || '送信に失敗しました。');
 
         localStorage.setItem(USER_NAME_STORAGE_KEY, userName);
-        alert('商品希望を送信しました。画像' + String(payload.imageCount || 0) + '枚を添付しました。');
+        const notice = payload.notification && payload.notification.ok === false
+          ? '\n管理者通知に失敗しましたが、商品希望は保存されています。'
+          : '';
+        alert('商品希望を送信しました。画像' + String(payload.imageCount || 0) + '枚を添付しました。' + notice);
         liff.closeWindow();
       } catch (error) {
         alert('送信エラー: ' + error.message);
