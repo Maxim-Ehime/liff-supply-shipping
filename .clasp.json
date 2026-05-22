@@ -1,5 +1,6 @@
 {
-  "scriptId": "1FJCUHmMxiuSuRoqxbWqovsEBCWkJNjZ8kEuup4SUTp2GK-cpNL9FF-1q",
+  // "scriptId": "1LUMsmNcX8RSN2Z2x3jmv4oLNe4999OntIFsl9LYcK3iYF2EH0mwv3oti", //本番用
+  "scriptId": "1FJCUHmMxiuSuRoqxbWqovsEBCWkJNjZ8kEuup4SUTp2GK-cpNL9FF-1q", //テスト用
   "rootDir": "",
   "scriptExtensions": [
     ".js",
