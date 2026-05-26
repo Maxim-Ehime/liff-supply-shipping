@@ -65,6 +65,8 @@ function onOpen() {
     .addItem('更新', 'refreshDashboard')
     .addItem('依頼者順を補完', 'supplementRequesterOrder')
     .addSeparator()
+    .addItem('権限を確認', 'authorizeRequiredScopes')
+    .addItem('商品希望リンクを整形', 'formatProductRequestSheetLinks')
     .addItem('商品希望画像を整理', 'cleanupOldProductRequestImageFolders')
     .addItem('商品希望画像の自動整理を設定', 'installProductImageCleanupTrigger')
     .addToUi();

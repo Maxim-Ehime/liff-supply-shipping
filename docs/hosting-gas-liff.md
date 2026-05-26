@@ -31,6 +31,28 @@ Keep the rest of the file unchanged unless the clasp project structure changes.
 
 The HTML files also contain `GAS_URL` and `LIFF_ID`. When switching production/test behavior, update those constants consistently.
 
+## OAuth Authorization
+
+Google OAuth consent cannot be pre-approved by code. Each Apps Script project and deploying account must approve newly required scopes at least once.
+
+Keep all expected scopes declared in `appsscript.json` before production rollout. This prevents surprise scope additions during normal operation.
+
+When a new production script project is prepared:
+
+1. Push the latest code and `appsscript.json`.
+2. Run `authorizeRequiredScopes` once from the Apps Script editor.
+3. Approve the OAuth consent screen.
+4. Deploy a new Web App version.
+
+`authorizeRequiredScopes` intentionally creates and removes a temporary Drive folder so the same Drive write/delete permissions used by product image upload and cleanup are requested without touching real request data.
+
+This is not required for every deploy. Repeat it only when:
+
+- a new Apps Script project is used
+- a different deploying account is used
+- `appsscript.json` adds new scopes
+- authorization was revoked from the Google account security settings
+
 ## Failed To Fetch Triage
 
 1. Confirm the page is using the intended `GAS_URL`.

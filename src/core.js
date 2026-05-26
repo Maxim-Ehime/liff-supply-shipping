@@ -10,6 +10,27 @@ function getAppConfig_() {
   };
 }
 
+function authorizeRequiredScopes() {
+  getAppConfig_();
+  SpreadsheetApp.getActiveSpreadsheet();
+  const rootFolder = DriveApp.createFolder('liff-supply-shipping-auth-check');
+  const childFolder = rootFolder.createFolder('child');
+  const file = childFolder.createFile(
+    Utilities.newBlob('authorization check', 'text/plain', 'auth-check.txt')
+  );
+  DriveApp.getFoldersByName(rootFolder.getName()).hasNext();
+  DriveApp.getFolderById(rootFolder.getId()).getName();
+  file.getUrl();
+  rootFolder.setTrashed(true);
+  Drive.Files.list({
+    q: "'" + rootFolder.getId() + "' in parents",
+    maxResults: 1
+  });
+  Drive.Files.remove(rootFolder.getId());
+  ScriptApp.getProjectTriggers();
+  return 'OK';
+}
+
 function getRequiredScriptProperty_(key) {
   const value = PropertiesService.getScriptProperties().getProperty(key);
   if (!value) {
@@ -38,7 +59,8 @@ function appendSupplyOrderToSheet_(orderData, config) {
 
 function appendProductRequestToSheet_(requestData, config) {
   const sheet = getRequiredSheetByName_(config.productRequestSheetName);
-  insertRequestRow_(sheet, toProductRequestRow_(requestData));
+  const row = insertRequestRow_(sheet, toProductRequestRow_(requestData));
+  applyProductRequestRowLinks_(sheet, row, requestData.imageFolderUrl, requestData.imageUrls || []);
 }
 
 const DASHBOARD_SHEET_NAME = 'ダッシュボード';
@@ -93,6 +115,7 @@ function setupDashboard() {
 function refreshDashboard() {
   const config = getAppConfig_();
   const dashboardSheet = getRequiredSheetByName_(DASHBOARD_SHEET_NAME);
+  ensureDashboardStaticLayout_(dashboardSheet);
   const targetDates = getDashboardTargetDates_(dashboardSheet);
   const statusFilter = getDashboardStatusFilter_(dashboardSheet);
   const requesterOrder = readRequesterOrder_();
@@ -197,6 +220,7 @@ function insertRequestRow_(sheet, rowValues) {
     const checkboxCell = sheet.getRange(2, rowValues.length);
     checkboxCell.insertCheckboxes();
     checkboxCell.setValue(false);
+    return 2;
   } finally {
     lock.releaseLock();
   }
@@ -285,6 +309,22 @@ function getDashboardHeaders_() {
   ];
 }
 
+function ensureDashboardStaticLayout_(sheet) {
+  sheet.getRange('D3:D7').setValues([
+    ['対象日件数'],
+    ['送り依頼'],
+    ['備品注文'],
+    ['商品希望'],
+    ['未完了']
+  ]);
+  sheet.getRange(DASHBOARD_HEADER_ROW, 1, 1, DASHBOARD_COLUMNS).setValues([getDashboardHeaders_()]);
+  sheet.getRange(DASHBOARD_HEADER_ROW, DASHBOARD_META_START_COLUMN, 1, DASHBOARD_META_COLUMNS).clearContent();
+  formatDashboardTableHeader_(sheet);
+  setDashboardColumnWidths_(sheet);
+  sheet.hideColumns(DASHBOARD_META_START_COLUMN, DASHBOARD_META_COLUMNS);
+  sheet.hideColumns(DASHBOARD_DATE_STORE_COLUMN);
+}
+
 function ensureRequesterOrderSheet_(sheet) {
   if (sheet.getLastRow() >= 1 && String(sheet.getRange(1, 1).getValue()).trim() === '並び順') {
     return;
@@ -299,7 +339,7 @@ function getDashboardTargetDates_(dashboardSheet) {
   const values = dashboardSheet
     .getRange(DASHBOARD_DATE_STORE_START_ROW, DASHBOARD_DATE_STORE_COLUMN, DASHBOARD_DATE_STORE_MAX_ROWS, 1)
     .getValues()
-    .map(function (row) { return normalizeDateKey_(row[0]); })
+    .map(function (row) { return normalizeDashboardStoredDateKey_(row[0]); })
     .filter(function (value) { return Boolean(value); });
 
   const unique = uniqueDateKeys_(values);
@@ -436,6 +476,17 @@ function readShippingRows_(sheetName) {
   });
 }
 
+function normalizeDashboardStoredDateKey_(value) {
+  if (value instanceof Date) {
+    return normalizeDateKey_(value);
+  }
+  const text = normalizeTextKey_(value);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    return '';
+  }
+  return parseDateKey_(text) ? text : '';
+}
+
 function readSupplyRows_(sheetName) {
   const sheet = getExistingSheetByName_(sheetName);
   if (!sheet) {
@@ -480,7 +531,15 @@ function readProductRequestRows_(sheetName) {
   }
   const rowCount = getSourceReadRowCount_(lastRow);
   const values = sheet.getRange(2, 1, rowCount, PRODUCT_DONE_COLUMN).getValues();
+  const folderRichValues = sheet.getRange(2, 8, rowCount, 1).getRichTextValues();
+  const imageRichValues = sheet.getRange(2, 9, rowCount, 1).getRichTextValues();
   return values.map(function (row, index) {
+    const folderLinks = getRichTextLinks_(folderRichValues[index][0]);
+    const folderUrls = folderLinks.length > 0 ? folderLinks : extractUrls_(row[7]);
+    const imageUrls = getRichTextLinks_(imageRichValues[index][0]);
+    const fallbackImageUrls = splitMultilineValue_(row[8]);
+    const dashboardImageUrls = imageUrls.length > 0 ? imageUrls : fallbackImageUrls;
+    const dashboardFolderUrl = folderUrls[0] || '';
     return {
       sourceType: DASHBOARD_SOURCE_PRODUCT,
       requestId: row[0],
@@ -492,11 +551,13 @@ function readProductRequestRows_(sheetName) {
       summary: row[5],
       minCt: '',
       maxCt: '',
-      supplement: formatProductDashboardSupplement_(row[6], row[7]),
+      supplement: dashboardFolderUrl ? 'フォルダを開く' : formatImageLinkLabels_(dashboardImageUrls),
       reviewStatus: '',
       done: row[9],
       sourceSheetName: sheetName,
-      sourceRow: index + 2
+      sourceRow: index + 2,
+      dashboardFolderUrl: dashboardFolderUrl,
+      dashboardImageUrls: dashboardImageUrls
     };
   });
 }
@@ -509,16 +570,110 @@ function getExistingSheetByName_(sheetName) {
   return spreadsheet.getSheetByName(sheetName);
 }
 
-function formatProductDashboardSupplement_(imageCount, folderUrl) {
-  const parts = [];
-  const count = Number(imageCount);
-  if (Number.isFinite(count) && count > 0) {
-    parts.push('画像' + count + '枚');
+function formatProductRequestSheetLinks() {
+  const config = getAppConfig_();
+  const sheet = getRequiredSheetByName_(config.productRequestSheetName);
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) {
+    return { rows: 0 };
   }
-  if (folderUrl) {
-    parts.push(folderUrl);
+
+  const rowCount = lastRow - 1;
+  const folderValues = sheet.getRange(2, 8, rowCount, 1).getValues();
+  const imageValues = sheet.getRange(2, 9, rowCount, 1).getValues();
+  const folderRichValues = sheet.getRange(2, 8, rowCount, 1).getRichTextValues();
+  const imageRichValues = sheet.getRange(2, 9, rowCount, 1).getRichTextValues();
+
+  for (let index = 0; index < rowCount; index += 1) {
+    const folderLinks = getRichTextLinks_(folderRichValues[index][0]);
+    const folderUrl = folderLinks[0] || extractUrls_(folderValues[index][0])[0] || '';
+    const imageLinks = getRichTextLinks_(imageRichValues[index][0]);
+    const imageUrls = imageLinks.length > 0 ? imageLinks : extractUrls_(imageValues[index][0]);
+    applyProductRequestRowLinks_(sheet, index + 2, folderUrl, imageUrls);
   }
-  return parts.join('\n');
+
+  return { rows: rowCount };
+}
+
+function applyProductRequestRowLinks_(sheet, row, folderUrl, imageUrls) {
+  const normalizedFolderUrl = toOptionalString_(folderUrl, '');
+  const normalizedImageUrls = Array.isArray(imageUrls) ? imageUrls.filter(function (url) {
+    return Boolean(toOptionalString_(url, ''));
+  }) : [];
+
+  const folderCell = sheet.getRange(row, 8);
+  if (normalizedFolderUrl) {
+    folderCell.setRichTextValue(buildSingleLinkRichText_('フォルダを開く', normalizedFolderUrl));
+  } else {
+    folderCell.clearContent();
+  }
+
+  const imageCell = sheet.getRange(row, 9);
+  if (normalizedImageUrls.length > 0) {
+    imageCell.setRichTextValue(buildImageLinksRichText_(normalizedImageUrls));
+  } else {
+    imageCell.clearContent();
+  }
+}
+
+function buildSingleLinkRichText_(text, url) {
+  return SpreadsheetApp.newRichTextValue()
+    .setText(text)
+    .setLinkUrl(0, text.length, url)
+    .build();
+}
+
+function buildImageLinksRichText_(imageUrls) {
+  const labels = imageUrls.map(function (_url, index) {
+    return '画像' + String(index + 1);
+  });
+  const text = labels.join('\n');
+  const builder = SpreadsheetApp.newRichTextValue().setText(text);
+  let offset = 0;
+  imageUrls.forEach(function (url, index) {
+    const label = labels[index];
+    builder.setLinkUrl(offset, offset + label.length, url);
+    offset += label.length + 1;
+  });
+  return builder.build();
+}
+
+function formatImageLinkLabels_(imageUrls) {
+  return imageUrls.map(function (_url, index) {
+    return '画像' + String(index + 1);
+  }).join('\n');
+}
+
+function splitMultilineValue_(value) {
+  const urls = extractUrls_(value);
+  if (urls.length > 0) {
+    return urls;
+  }
+  return String(value || '').split(/\r?\n/).map(function (item) {
+    return item.trim();
+  }).filter(function (item) {
+    return Boolean(item);
+  });
+}
+
+function extractUrls_(value) {
+  const text = String(value || '');
+  return text.match(/https?:\/\/[^\s]+/g) || [];
+}
+
+function getRichTextLinks_(richTextValue) {
+  if (!richTextValue) {
+    return [];
+  }
+  const links = [];
+  const runs = richTextValue.getRuns();
+  runs.forEach(function (run) {
+    const url = run.getLinkUrl();
+    if (url && links.indexOf(url) === -1) {
+      links.push(url);
+    }
+  });
+  return links;
 }
 
 function getSourceReadRowCount_(lastRow) {
@@ -603,7 +758,9 @@ function buildDashboardRows_(config, targetDates, statusFilter, requesterOrderMa
       toOptionalString_(row.reviewStatus, ''),
       toDoneBoolean_(row.done),
       row.sourceSheetName,
-      row.sourceRow
+      row.sourceRow,
+      row.dashboardFolderUrl || '',
+      row.dashboardImageUrls || []
     ];
   });
 
@@ -646,6 +803,7 @@ function writeDashboardRows_(sheet, rows) {
   });
 
   sheet.getRange(DASHBOARD_DATA_START_ROW, 1, visibleRows.length, DASHBOARD_COLUMNS).setValues(visibleRows);
+  applyDashboardProductLinks_(sheet, rowsToRender);
   sheet.getRange(DASHBOARD_DATA_START_ROW, DASHBOARD_META_START_COLUMN, metaRows.length, DASHBOARD_META_COLUMNS).setValues(metaRows);
   sheet.getRange(DASHBOARD_DATA_START_ROW, 3, rowsToRender.length, 1).setNumberFormat('yyyy-mm-dd');
   sheet.getRange(DASHBOARD_DATA_START_ROW, DASHBOARD_DONE_COLUMN, rowsToRender.length, 1).insertCheckboxes();
@@ -654,6 +812,15 @@ function writeDashboardRows_(sheet, rows) {
   sheet.hideColumns(DASHBOARD_DATE_STORE_COLUMN);
   formatDashboardDataRows_(sheet, rowsToRender.length);
   applyDashboardFilter_(sheet, rowsToRender.length);
+}
+
+function applyDashboardProductLinks_(sheet, rowsToRender) {
+  rowsToRender.forEach(function (row, index) {
+    const folderUrl = toOptionalString_(row[12], '');
+    if (folderUrl) {
+      sheet.getRange(DASHBOARD_DATA_START_ROW + index, 8).setRichTextValue(buildSingleLinkRichText_('フォルダを開く', folderUrl));
+    }
+  });
 }
 
 function writeDashboardSummary_(sheet, summary) {
@@ -746,7 +913,7 @@ function writeDashboardStoredDates_(sheet, dateKeys) {
   const seen = {};
   dateKeys.forEach(function (dateKey) {
     const normalized = normalizeDateKey_(dateKey);
-    if (!normalized || seen.hasOwnProperty(normalized)) {
+    if (!parseDateKey_(normalized) || seen.hasOwnProperty(normalized)) {
       return;
     }
     seen[normalized] = true;
@@ -795,6 +962,7 @@ function removeDashboardProtectionByDescription_(sheet, description) {
 
 function getDashboardStoredDatesForDialog_() {
   const sheet = getRequiredSheetByName_(DASHBOARD_SHEET_NAME);
+  ensureDashboardStaticLayout_(sheet);
   return getDashboardTargetDates_(sheet);
 }
 
