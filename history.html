@@ -139,6 +139,28 @@
       margin-top: 6px;
       word-break: break-all;
     }
+
+    .card-actions {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 10px;
+    }
+
+    .delete-btn {
+      border: 1px solid #FDA29B;
+      background: #fff;
+      color: #B42318;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .delete-btn:disabled {
+      opacity: 0.55;
+      cursor: default;
+    }
   </style>
 </head>
 
@@ -199,6 +221,15 @@
       }).format(date);
     }
 
+    function escapeHtml(value) {
+      return String(value === undefined || value === null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
     function renderHistory(items) {
       const listEl = document.getElementById('list');
       const emptyEl = document.getElementById('empty');
@@ -213,27 +244,69 @@
       const html = items.map(item => {
         const doneClass = item.done ? 'done' : 'pending';
         const doneLabel = item.done ? '完了' : '未完了';
-        const requestedAt = formatDateTime(item.requestedAt);
-        const arrivalDate = item.arrivalDate || '未設定';
-        const summary = item.summary || '（内容なし）';
-        const detailText = item.detailText || '';
-        const requestId = item.requestId || '';
+        const requestedAt = escapeHtml(formatDateTime(item.requestedAt));
+        const arrivalDate = escapeHtml(item.arrivalDate || '未設定');
+        const summary = escapeHtml(item.summary || '（内容なし）');
+        const detailText = escapeHtml(item.detailText || '');
+        const requestId = escapeHtml(item.requestId || '');
         return `
           <div class="card">
             <div class="row-top">
               <div class="requested-at">${requestedAt}</div>
               <div class="done-chip ${doneClass}">${doneLabel}</div>
             </div>
-            <div class="type">${item.type}</div>
+            <div class="type">${escapeHtml(item.type)}</div>
             <div class="meta">希望着日: ${arrivalDate}</div>
             <div class="meta">${summary}</div>
             <div class="meta">${detailText}</div>
             <div class="request-id">依頼ID: ${requestId}</div>
+            <div class="card-actions">
+              <button class="delete-btn" type="button" data-request-id="${requestId}" onclick="deleteHistoryItem(this)">削除</button>
+            </div>
           </div>
         `;
       }).join('');
 
       listEl.innerHTML = html;
+    }
+
+    async function deleteHistoryItem(button) {
+      const requestId = button.dataset.requestId;
+      if (!requestId || !currentProfile || !currentProfile.userId) {
+        setError('削除に必要な情報が見つかりません。画面を開き直してください。');
+        return;
+      }
+      if (!confirm('この依頼を削除します。よろしいですか？')) {
+        return;
+      }
+
+      button.disabled = true;
+      button.textContent = '削除中...';
+      try {
+        const response = await fetch(GAS_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({
+            action: 'liff_delete_request',
+            data: {
+              userId: currentProfile.userId,
+              requestId: requestId
+            }
+          })
+        });
+        if (!response.ok) {
+          throw new Error('HTTP ' + response.status);
+        }
+        const payload = await response.json();
+        if (!payload.ok) {
+          throw new Error(payload.error || '削除に失敗しました');
+        }
+        await loadHistory();
+      } catch (error) {
+        setError('削除に失敗しました: ' + error.message);
+        button.disabled = false;
+        button.textContent = '削除';
+      }
     }
 
     function applyFilterButtonState() {

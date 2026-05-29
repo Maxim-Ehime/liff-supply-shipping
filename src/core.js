@@ -1414,6 +1414,88 @@ function normalizeHistoryStatus_(value) {
   return 'all';
 }
 
+function normalizeDeleteRequestPayload_(rawData) {
+  const data = ensureObject_(rawData, 'data');
+  return {
+    userId: toRequiredString_(data.userId, 'userId'),
+    requestId: toRequiredString_(data.requestId, 'requestId')
+  };
+}
+
+function deleteUserRequest_(deleteRequest, config) {
+  const targets = [
+    { type: DASHBOARD_SOURCE_SHIPPING, sheetName: config.masterSheetName, userColumn: 3, folderColumn: 0 },
+    { type: DASHBOARD_SOURCE_SUPPLY, sheetName: config.supplySheetName, userColumn: 3, folderColumn: 0 },
+    { type: DASHBOARD_SOURCE_PRODUCT, sheetName: config.productRequestSheetName, userColumn: 3, folderColumn: 8 }
+  ];
+
+  for (let index = 0; index < targets.length; index += 1) {
+    const target = targets[index];
+    const sheet = getExistingSheetByName_(target.sheetName);
+    if (!sheet) {
+      continue;
+    }
+    const found = findRequestRow_(sheet, deleteRequest.requestId, target.userColumn);
+    if (!found) {
+      continue;
+    }
+    if (found.userId !== deleteRequest.userId) {
+      throw new Error('この依頼は削除できません。');
+    }
+    const folderUrl = target.folderColumn > 0 ? getCellFirstLinkOrText_(sheet.getRange(found.row, target.folderColumn)) : '';
+    if (target.type === DASHBOARD_SOURCE_PRODUCT && folderUrl) {
+      trashDriveFolderByUrl_(folderUrl);
+    }
+    sheet.deleteRow(found.row);
+    return { deleted: true, type: target.type };
+  }
+
+  throw new Error('削除対象の依頼が見つかりません。');
+}
+
+function findRequestRow_(sheet, requestId, userColumn) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) {
+    return null;
+  }
+  const values = sheet.getRange(2, 1, lastRow - 1, Math.max(userColumn, 1)).getValues();
+  for (let index = 0; index < values.length; index += 1) {
+    if (toOptionalString_(values[index][0], '') === requestId) {
+      return {
+        row: index + 2,
+        userId: toOptionalString_(values[index][userColumn - 1], '')
+      };
+    }
+  }
+  return null;
+}
+
+function getCellFirstLinkOrText_(range) {
+  const links = getRichTextLinks_(range.getRichTextValue());
+  if (links.length > 0) {
+    return links[0];
+  }
+  return toOptionalString_(range.getValue(), '');
+}
+
+function trashDriveFolderByUrl_(url) {
+  const folderId = extractDriveFolderId_(url);
+  if (!folderId) {
+    return;
+  }
+  try {
+    DriveApp.getFolderById(folderId).setTrashed(true);
+  } catch (error) {
+    Logger.log('Product image folder trash failed: ' + toErrorMessage_(error));
+  }
+}
+
+function extractDriveFolderId_(url) {
+  const text = toOptionalString_(url, '');
+  const match = text.match(/\/folders\/([a-zA-Z0-9_-]+)/) || text.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  return match ? match[1] : '';
+}
+
 function getHistoryItems_(requestData, config) {
   const shippingItems = readShippingRows_(config.masterSheetName).map(function (row) {
     return {
@@ -1442,8 +1524,20 @@ function getHistoryItems_(requestData, config) {
       done: toDoneBoolean_(row.done)
     };
   });
+  const productItems = readProductRequestRows_(config.productRequestSheetName).map(function (row) {
+    return {
+      requestId: toOptionalString_(row.requestId, ''),
+      userId: toOptionalString_(row.userId, ''),
+      type: DASHBOARD_SOURCE_PRODUCT,
+      requestedAt: row.timestamp,
+      arrivalDate: row.arrivalDate,
+      summary: row.summary,
+      detailText: toOptionalString_(row.supplement, '画像なし'),
+      done: toDoneBoolean_(row.done)
+    };
+  });
 
-  return shippingItems.concat(supplyItems)
+  return shippingItems.concat(supplyItems).concat(productItems)
     .filter(function (item) {
       return item.userId && item.userId === requestData.userId;
     })

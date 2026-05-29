@@ -3,58 +3,85 @@ function doPost(e) {
     const request = parseRequestBody_(e);
     const action = toRequiredString_(request.action, 'action');
     const config = getAppConfig_();
-
-    if (action === 'liff_shipping') {
-      const shippingData = normalizeShippingPayload_(request.data);
-      appendShippingToSheet_(shippingData, config);
-      const notification = safePushLineTextMessage_(config, buildShippingNotificationText_(shippingData));
-      return createJsonResponse_({ ok: true, action: action, notification: notification });
-    }
-
-    if (action === 'liff_order') {
-      const orderData = normalizeOrderPayload_(request.data);
-      appendSupplyOrderToSheet_(orderData, config);
-      const notification = safePushLineTextMessage_(config, buildOrderNotificationText_(orderData));
-      return createJsonResponse_({ ok: true, action: action, notification: notification });
-    }
-
-    if (action === 'liff_product_request') {
-      const requestData = normalizeProductRequestPayload_(request.data);
-      const requestId = createRequestId_('PRD');
-      const saved = saveProductRequestImages_(requestId, requestData, config);
-      const payload = Object.assign({}, requestData, {
-        requestId: requestId,
-        imageUrls: saved.imageUrls,
-        imageFolderUrl: saved.folderUrl
-      });
-      appendProductRequestToSheet_(payload, config);
-      const notification = safePushLineTextMessage_(config, buildProductRequestNotificationText_(payload));
-      return createJsonResponse_({
-        ok: true,
-        action: action,
-        requestId: requestId,
-        imageCount: saved.imageCount,
-        notification: notification
-      });
-    }
-
-    if (action === 'liff_history') {
-      const historyRequest = normalizeHistoryRequest_(request.data);
-      const items = getHistoryItems_(historyRequest, config);
-      return createJsonResponse_({
-        ok: true,
-        action: action,
-        items: items
-      });
-    }
-
-    throw new Error('Unsupported action: ' + action);
+    const handler = getDoPostActionHandler_(action);
+    return createJsonResponse_(handler(request.data, config, action));
   } catch (error) {
     return createJsonResponse_({
       ok: false,
       error: toErrorMessage_(error)
     });
   }
+}
+
+function getDoPostActionHandler_(action) {
+  const handlers = {
+    liff_shipping: handleShippingRequest_,
+    liff_order: handleSupplyOrderRequest_,
+    liff_product_request: handleProductRequest_,
+    liff_history: handleHistoryRequest_,
+    liff_delete_request: handleDeleteRequest_
+  };
+  const handler = handlers[action];
+  if (!handler) {
+    throw new Error('Unsupported action: ' + action);
+  }
+  return handler;
+}
+
+function handleShippingRequest_(data, config, action) {
+  const shippingData = normalizeShippingPayload_(data);
+  appendShippingToSheet_(shippingData, config);
+  const notification = safePushLineTextMessage_(config, buildShippingNotificationText_(shippingData));
+  return { ok: true, action: action, notification: notification };
+}
+
+function handleSupplyOrderRequest_(data, config, action) {
+  const orderData = normalizeOrderPayload_(data);
+  appendSupplyOrderToSheet_(orderData, config);
+  const notification = safePushLineTextMessage_(config, buildOrderNotificationText_(orderData));
+  return { ok: true, action: action, notification: notification };
+}
+
+function handleProductRequest_(data, config, action) {
+  const requestData = normalizeProductRequestPayload_(data);
+  const requestId = createRequestId_('PRD');
+  const saved = saveProductRequestImages_(requestId, requestData, config);
+  const payload = Object.assign({}, requestData, {
+    requestId: requestId,
+    imageUrls: saved.imageUrls,
+    imageFolderUrl: saved.folderUrl
+  });
+  appendProductRequestToSheet_(payload, config);
+  const notification = safePushLineTextMessage_(config, buildProductRequestNotificationText_(payload));
+  return {
+    ok: true,
+    action: action,
+    requestId: requestId,
+    imageCount: saved.imageCount,
+    notification: notification
+  };
+}
+
+function handleHistoryRequest_(data, config, action) {
+  const historyRequest = normalizeHistoryRequest_(data);
+  const items = getHistoryItems_(historyRequest, config);
+  return {
+    ok: true,
+    action: action,
+    items: items
+  };
+}
+
+function handleDeleteRequest_(data, config, action) {
+  const deleteRequest = normalizeDeleteRequestPayload_(data);
+  const result = deleteUserRequest_(deleteRequest, config);
+  return {
+    ok: true,
+    action: action,
+    requestId: deleteRequest.requestId,
+    deleted: result.deleted,
+    type: result.type
+  };
 }
 
 function onOpen() {

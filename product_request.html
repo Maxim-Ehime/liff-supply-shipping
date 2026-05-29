@@ -180,7 +180,7 @@
   <div class="form-group">
     <label>カタログ・希望商品の画像</label>
     <input id="imageInput" type="file" accept="image/*" multiple style="display:none;">
-    <button id="uploadButton" class="upload-btn" type="button">画像を追加（最大5枚）</button>
+    <button id="uploadButton" class="upload-btn" type="button">画像を追加（最大3枚）</button>
     <div id="thumbList" class="thumb-list"></div>
     <div class="hint">画像を添付すると、管理側で希望内容の確認がしやすくなります。</div>
   </div>
@@ -194,9 +194,9 @@
     const GAS_URL = "https://script.google.com/macros/s/AKfycbz1GRizrjZXu0mQ-N58HgTwWJ55BuG4VteRkP4aPmhuWOaeRJNTejgVZuHRmwpsr4E/exec";
     const LIFF_ID = "2009819015-Pj5rk2Ru";
     const USER_NAME_STORAGE_KEY = "requestUserName";
-    const MAX_IMAGES = 5;
-    const MAX_IMAGE_EDGE = 1280;
-    const JPEG_QUALITY = 0.82;
+    const MAX_IMAGES = 3;
+    const MAX_IMAGE_EDGE = 960;
+    const JPEG_QUALITY = 0.74;
     let currentProfile = null;
     let pickedImages = [];
 
@@ -323,22 +323,24 @@
     async function addSelectedImages(fileList) {
       const remain = MAX_IMAGES - pickedImages.length;
       if (remain <= 0) {
-        alert('画像は最大5枚までです。');
+        alert('画像は最大3枚までです。');
         return;
       }
 
       const files = Array.from(fileList).slice(0, remain);
-      for (let i = 0; i < files.length; i += 1) {
-        const raw = await readFileAsDataUrl(files[i]);
+      const tasks = files.map(async function (file, offset) {
+        const raw = await readFileAsDataUrl(file);
         const compressed = await downscaleImageToJpeg(raw);
         const parts = splitDataUrl(compressed);
-        pickedImages.push({
-          fileName: files[i].name || ('image_' + (pickedImages.length + 1) + '.jpg'),
+        return {
+          fileName: file.name || ('image_' + (pickedImages.length + offset + 1) + '.jpg'),
           contentType: parts.contentType,
           base64Data: parts.base64Data,
           previewUrl: compressed
-        });
-      }
+        };
+      });
+      const results = await Promise.all(tasks);
+      pickedImages = pickedImages.concat(results);
       renderThumbnails();
     }
 
