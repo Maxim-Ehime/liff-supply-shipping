@@ -66,6 +66,19 @@
       margin: 18px 0;
     }
 
+    #notice {
+      display: none;
+      text-align: center;
+      color: #027A48;
+      background: #ECFDF3;
+      border: 1px solid #ABEFC6;
+      border-radius: 8px;
+      margin: 0 0 12px;
+      padding: 10px 12px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
     #retryBtn {
       display: none;
       margin: 0 auto 14px;
@@ -173,6 +186,7 @@
   </div>
 
   <div id="loading">読み込み中...</div>
+  <div id="notice"></div>
   <div id="error"></div>
   <button id="retryBtn" onclick="loadHistory()">再読み込み</button>
   <div id="empty">依頼履歴はまだありません</div>
@@ -188,6 +202,7 @@
 
     let currentStatus = 'all';
     let currentProfile = null;
+    let noticeTimer = null;
 
     function setLoading(visible) {
       document.getElementById('loading').style.display = visible ? 'block' : 'none';
@@ -205,6 +220,20 @@
         errorEl.style.display = 'none';
         retryBtn.style.display = 'none';
       }
+    }
+
+    function showNotice(message) {
+      const noticeEl = document.getElementById('notice');
+      if (noticeTimer) {
+        clearTimeout(noticeTimer);
+      }
+      noticeEl.textContent = message;
+      noticeEl.style.display = 'block';
+      noticeTimer = setTimeout(function () {
+        noticeEl.textContent = '';
+        noticeEl.style.display = 'none';
+        noticeTimer = null;
+      }, 2800);
     }
 
     function formatDateTime(isoText) {
@@ -302,6 +331,7 @@
           throw new Error(payload.error || '削除に失敗しました');
         }
         await loadHistory();
+        showNotice('削除しました');
       } catch (error) {
         setError('削除に失敗しました: ' + error.message);
         button.disabled = false;
