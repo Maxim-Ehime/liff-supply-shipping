@@ -180,7 +180,7 @@
   <div class="form-group">
     <label>カタログ・希望商品の画像</label>
     <input id="imageInput" type="file" accept="image/*" multiple style="display:none;">
-    <button id="uploadButton" class="upload-btn" type="button">画像を追加（最大3枚）</button>
+    <button id="uploadButton" class="upload-btn" type="button">画像を追加（最大5枚）</button>
     <div id="thumbList" class="thumb-list"></div>
     <div class="hint">画像を添付すると、管理側で希望内容の確認がしやすくなります。</div>
   </div>
@@ -194,7 +194,7 @@
     const GAS_URL = LiffConfig.GAS_URL;
     const LIFF_ID = LiffConfig.LIFF_ID;
     const USER_NAME_STORAGE_KEY = "requestUserName";
-    const MAX_IMAGES = 3;
+    const MAX_IMAGES = 5;
     const MAX_IMAGE_EDGE = 960;
     const JPEG_QUALITY = 0.74;
     let currentProfile = null;
@@ -311,7 +311,7 @@
     async function addSelectedImages(fileList) {
       const remain = MAX_IMAGES - pickedImages.length;
       if (remain <= 0) {
-        alert('画像は最大3枚までです。');
+        alert('画像は最大5枚までです。');
         return;
       }
 
