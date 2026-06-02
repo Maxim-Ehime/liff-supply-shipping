@@ -227,6 +227,7 @@
     let currentOffset = 0;
     let hasMoreHistory = false;
     let isHistoryLoading = false;
+    let historyItems = [];
 
     function setLoading(visible) {
       isHistoryLoading = visible;
@@ -301,14 +302,30 @@
         .replace(/'/g, '&#39;');
     }
 
-    function renderHistory(items, append) {
+    function getVisibleHistoryItems() {
+      if (currentStatus === 'pending') {
+        return historyItems.filter(function (item) {
+          return !item.done;
+        });
+      }
+      if (currentStatus === 'done') {
+        return historyItems.filter(function (item) {
+          return item.done;
+        });
+      }
+      return historyItems;
+    }
+
+    function renderVisibleHistory() {
+      renderHistory(getVisibleHistoryItems());
+    }
+
+    function renderHistory(items) {
       const listEl = document.getElementById('list');
       const emptyEl = document.getElementById('empty');
-      if (!append) {
-        listEl.innerHTML = '';
-      }
+      listEl.innerHTML = '';
 
-      if ((!items || items.length === 0) && listEl.children.length === 0) {
+      if (!items || items.length === 0) {
         emptyEl.style.display = 'block';
         return;
       }
@@ -340,11 +357,7 @@
         `;
       }).join('');
 
-      if (append) {
-        listEl.innerHTML += html;
-      } else {
-        listEl.innerHTML = html;
-      }
+      listEl.innerHTML = html;
     }
 
     async function deleteHistoryItem(button) {
@@ -378,7 +391,10 @@
         if (!payload.ok) {
           throw new Error(payload.error || '削除に失敗しました');
         }
-        await loadHistory();
+        historyItems = historyItems.filter(function (item) {
+          return item.requestId !== requestId;
+        });
+        renderVisibleHistory();
         showNotice('削除しました');
       } catch (error) {
         setError('削除に失敗しました: ' + error.message);
@@ -409,6 +425,7 @@
       if (!append) {
         currentOffset = 0;
         hasMoreHistory = false;
+        historyItems = [];
         updateMoreButton();
       }
       setLoading(true);
@@ -426,7 +443,7 @@
             action: 'liff_history',
             data: {
               userId: currentProfile.userId,
-              status: currentStatus,
+              status: 'all',
               limit: PAGE_LIMIT,
               offset: currentOffset
             }
@@ -440,7 +457,8 @@
           throw new Error(payload.error || '履歴取得に失敗しました');
         }
         const items = payload.items || [];
-        renderHistory(items, append);
+        historyItems = append ? historyItems.concat(items) : items;
+        renderVisibleHistory();
         currentOffset = Number.isFinite(Number(payload.nextOffset))
           ? Number(payload.nextOffset)
           : currentOffset + items.length;
@@ -466,7 +484,7 @@
       }
       currentStatus = status;
       applyFilterButtonState();
-      loadHistory();
+      renderVisibleHistory();
     }
 
     async function init() {
