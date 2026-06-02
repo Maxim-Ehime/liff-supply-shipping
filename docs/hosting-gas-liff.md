@@ -84,7 +84,7 @@ Examples:
 - Product request: `https://liff.line.me/LIFF_ID/?page=product`
 - Request history: `https://liff.line.me/LIFF_ID/?page=history`
 
-`page=shipping` stays on `index.html` because the shipping request form is the top page. `page=order`, `page=product`, and `page=history` are redirected with `location.replace()` to the existing individual HTML pages.
+`page=shipping` stays on `index.html` because the shipping request form is the top page. `page=order`, `page=product`, and `page=history` are loaded by the `index.html` SPA entry without changing the visible URL to the individual HTML page. If the SPA load fails, `index.html` falls back to `location.replace()` for the requested page.
 
 Secondary forms call `liff.login({ redirectUri })` with `./index.html?form=...`.
 

@@ -57,7 +57,7 @@
         target = './history.html';
       }
 
-      if (form === 'shipping') {
+      function clearPendingForm() {
         try {
           sessionStorage.removeItem(PENDING_FORM_KEY);
           sessionStorage.removeItem(PENDING_FORM_TIME_KEY);
@@ -66,17 +66,34 @@
         }
       }
 
-      if (target) {
-        try {
-          if (formSource === 'pending') {
-            sessionStorage.removeItem(PENDING_FORM_KEY);
-            sessionStorage.removeItem(PENDING_FORM_TIME_KEY);
-          }
-        } catch (error) {
-          // Continue even if sessionStorage is unavailable.
-        }
+      function loadSpaDocument(url) {
+        window.__LIFF_SPA_TARGET__ = url;
         document.documentElement.classList.add('redirecting');
-        window.location.replace(target);
+        fetch(url, { cache: 'no-store' })
+          .then(function (response) {
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            return response.text();
+          })
+          .then(function (html) {
+            document.open();
+            document.write(html);
+            document.close();
+          })
+          .catch(function (error) {
+            console.error('SPA page load failed', error);
+            window.location.replace(url);
+          });
+      }
+
+      if (form === 'shipping') {
+        clearPendingForm();
+      }
+
+      if (target) {
+        if (formSource === 'pending') {
+          clearPendingForm();
+        }
+        loadSpaDocument(target);
       }
     })();
   </script>
@@ -334,6 +351,7 @@
 
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script>
+    if (!window.__LIFF_SPA_TARGET__) {
 
     // const GAS_URL = "https://script.google.com/macros/s/AKfycbz6M7Gi704Vc3qlMQ7GD4Hh8mq0rf4I8QH-kqT7oOs1T8jkYJB6JQFQmMS3IhGD31VE/exec"; // 本番環境
     // const LIFF_ID = "2009669107-iTCKuJvo"; // 本番環境
@@ -439,7 +457,12 @@
       }
     }
 
+    window.changeStepperQty = changeStepperQty;
+    window.submitShipping = submitShipping;
+    window.openHistory = openHistory;
+
     init();
+    }
   </script>
 </body>
 
