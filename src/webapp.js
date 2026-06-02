@@ -64,11 +64,13 @@ function handleProductRequest_(data, config, action) {
 
 function handleHistoryRequest_(data, config, action) {
   const historyRequest = normalizeHistoryRequest_(data);
-  const items = getHistoryItems_(historyRequest, config);
+  const history = getHistoryItems_(historyRequest, config);
   return {
     ok: true,
     action: action,
-    items: items
+    items: history.items,
+    hasMore: history.hasMore,
+    nextOffset: history.nextOffset
   };
 }
 

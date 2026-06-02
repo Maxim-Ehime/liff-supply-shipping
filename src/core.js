@@ -91,7 +91,7 @@ const SHIPPING_DONE_COLUMN = 10;
 const SUPPLY_DONE_COLUMN = 8;
 const PRODUCT_DONE_COLUMN = 10;
 const SOURCE_READ_MAX_ROWS = 100;
-const HISTORY_DEFAULT_LIMIT = 50;
+const HISTORY_DEFAULT_LIMIT = 10;
 const HISTORY_MAX_LIMIT = 100;
 const PRODUCT_IMAGE_TRASH_DAYS = 14;
 const PRODUCT_IMAGE_DELETE_DAYS = 30;
@@ -454,7 +454,8 @@ function readShippingRows_(sheetName) {
     return [];
   }
   const rowCount = getSourceReadRowCount_(lastRow);
-  const values = sheet.getRange(2, 1, rowCount, SHIPPING_DONE_COLUMN).getValues();
+  const startRow = getSourceReadStartRow_(lastRow);
+  const values = sheet.getRange(startRow, 1, rowCount, SHIPPING_DONE_COLUMN).getValues();
   return values.map(function (row, index) {
     return {
       sourceType: DASHBOARD_SOURCE_SHIPPING,
@@ -471,7 +472,7 @@ function readShippingRows_(sheetName) {
       reviewStatus: '',
       done: row[9],
       sourceSheetName: sheetName,
-      sourceRow: index + 2
+      sourceRow: startRow + index
     };
   });
 }
@@ -497,7 +498,8 @@ function readSupplyRows_(sheetName) {
     return [];
   }
   const rowCount = getSourceReadRowCount_(lastRow);
-  const values = sheet.getRange(2, 1, rowCount, SUPPLY_DONE_COLUMN).getValues();
+  const startRow = getSourceReadStartRow_(lastRow);
+  const values = sheet.getRange(startRow, 1, rowCount, SUPPLY_DONE_COLUMN).getValues();
   return values.map(function (row, index) {
     const doneValue = row[7] !== '' ? row[7] : row[5];
     return {
@@ -515,7 +517,7 @@ function readSupplyRows_(sheetName) {
       reviewStatus: '',
       done: doneValue,
       sourceSheetName: sheetName,
-      sourceRow: index + 2
+      sourceRow: startRow + index
     };
   });
 }
@@ -530,9 +532,10 @@ function readProductRequestRows_(sheetName) {
     return [];
   }
   const rowCount = getSourceReadRowCount_(lastRow);
-  const values = sheet.getRange(2, 1, rowCount, PRODUCT_DONE_COLUMN).getValues();
-  const folderRichValues = sheet.getRange(2, 8, rowCount, 1).getRichTextValues();
-  const imageRichValues = sheet.getRange(2, 9, rowCount, 1).getRichTextValues();
+  const startRow = getSourceReadStartRow_(lastRow);
+  const values = sheet.getRange(startRow, 1, rowCount, PRODUCT_DONE_COLUMN).getValues();
+  const folderRichValues = sheet.getRange(startRow, 8, rowCount, 1).getRichTextValues();
+  const imageRichValues = sheet.getRange(startRow, 9, rowCount, 1).getRichTextValues();
   return values.map(function (row, index) {
     const folderLinks = getRichTextLinks_(folderRichValues[index][0]);
     const folderUrls = folderLinks.length > 0 ? folderLinks : extractUrls_(row[7]);
@@ -555,7 +558,7 @@ function readProductRequestRows_(sheetName) {
       reviewStatus: '',
       done: row[9],
       sourceSheetName: sheetName,
-      sourceRow: index + 2,
+      sourceRow: startRow + index,
       dashboardFolderUrl: dashboardFolderUrl,
       dashboardImageUrls: dashboardImageUrls
     };
@@ -678,6 +681,10 @@ function getRichTextLinks_(richTextValue) {
 
 function getSourceReadRowCount_(lastRow) {
   return Math.min(lastRow - 1, SOURCE_READ_MAX_ROWS);
+}
+
+function getSourceReadStartRow_(lastRow) {
+  return Math.max(2, lastRow - getSourceReadRowCount_(lastRow) + 1);
 }
 
 function buildDashboardRows_(config, targetDates, statusFilter, requesterOrderMap) {
@@ -1391,7 +1398,8 @@ function normalizeHistoryRequest_(rawData) {
   return {
     userId: toRequiredString_(data.userId, 'userId'),
     status: status,
-    limit: toHistoryLimit_(data.limit)
+    limit: toHistoryLimit_(data.limit),
+    offset: toHistoryOffset_(data.offset)
   };
 }
 
@@ -1404,6 +1412,17 @@ function toHistoryLimit_(value) {
     throw new Error('limit must be a positive integer.');
   }
   return Math.min(limit, HISTORY_MAX_LIMIT);
+}
+
+function toHistoryOffset_(value) {
+  if (value === undefined || value === null || value === '') {
+    return 0;
+  }
+  const offset = Number(value);
+  if (!Number.isFinite(offset) || Math.floor(offset) !== offset || offset < 0) {
+    throw new Error('offset must be a non-negative integer.');
+  }
+  return offset;
 }
 
 function normalizeHistoryStatus_(value) {
@@ -1537,7 +1556,7 @@ function getHistoryItems_(requestData, config) {
     };
   });
 
-  return shippingItems.concat(supplyItems).concat(productItems)
+  const matchedItems = shippingItems.concat(supplyItems).concat(productItems)
     .filter(function (item) {
       return item.userId && item.userId === requestData.userId;
     })
@@ -1552,9 +1571,11 @@ function getHistoryItems_(requestData, config) {
     })
     .sort(function (left, right) {
       return toComparableTime_(right.requestedAt) - toComparableTime_(left.requestedAt);
-    })
-    .slice(0, requestData.limit)
-    .map(function (item) {
+    });
+  const start = requestData.offset;
+  const pageItems = matchedItems.slice(start, start + requestData.limit);
+  return {
+    items: pageItems.map(function (item) {
       return {
         requestId: item.requestId,
         type: item.type,
@@ -1564,7 +1585,10 @@ function getHistoryItems_(requestData, config) {
         detailText: item.detailText,
         done: item.done
       };
-    });
+    }),
+    hasMore: matchedItems.length > start + pageItems.length,
+    nextOffset: start + pageItems.length
+  };
 }
 
 function toIsoString_(value) {

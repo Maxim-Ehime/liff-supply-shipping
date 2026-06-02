@@ -91,6 +91,26 @@
       font-weight: 700;
     }
 
+    #moreBtn {
+      display: none;
+      width: 100%;
+      border: 1px solid #D8C7FF;
+      background: #fff;
+      color: #6D28D9;
+      border-radius: 8px;
+      padding: 11px 0;
+      cursor: pointer;
+      font-weight: 700;
+      margin: 4px 0 10px;
+    }
+
+    .filter-btn:disabled,
+    #retryBtn:disabled,
+    #moreBtn:disabled {
+      opacity: 0.55;
+      cursor: default;
+    }
+
     .card {
       background: #fff;
       border-radius: 10px;
@@ -191,6 +211,7 @@
   <button id="retryBtn" onclick="loadHistory()">再読み込み</button>
   <div id="empty">依頼履歴はまだありません</div>
   <div id="list"></div>
+  <button id="moreBtn" onclick="loadMoreHistory()">もっと見る</button>
 
   <script src="./liff_config.js"></script>
   <script src="./liff_common.js"></script>
@@ -198,14 +219,35 @@
   <script>
     const GAS_URL = LiffConfig.GAS_URL;
     const LIFF_ID = LiffConfig.LIFF_ID;
-    const DEFAULT_LIMIT = 50;
+    const PAGE_LIMIT = 10;
 
     let currentStatus = 'all';
     let currentProfile = null;
     let noticeTimer = null;
+    let currentOffset = 0;
+    let hasMoreHistory = false;
+    let isHistoryLoading = false;
 
     function setLoading(visible) {
+      isHistoryLoading = visible;
       document.getElementById('loading').style.display = visible ? 'block' : 'none';
+      setHistoryControlsDisabled(visible);
+      updateMoreButton();
+    }
+
+    function setHistoryControlsDisabled(disabled) {
+      document.querySelectorAll('.filter-btn, .delete-btn').forEach(function (button) {
+        button.disabled = disabled;
+      });
+      document.getElementById('retryBtn').disabled = disabled;
+      document.getElementById('moreBtn').disabled = disabled;
+    }
+
+    function updateMoreButton() {
+      const moreBtn = document.getElementById('moreBtn');
+      moreBtn.style.display = hasMoreHistory ? 'block' : 'none';
+      moreBtn.disabled = isHistoryLoading;
+      moreBtn.textContent = isHistoryLoading ? '読み込み中...' : 'もっと見る';
     }
 
     function setError(message) {
@@ -259,12 +301,14 @@
         .replace(/'/g, '&#39;');
     }
 
-    function renderHistory(items) {
+    function renderHistory(items, append) {
       const listEl = document.getElementById('list');
       const emptyEl = document.getElementById('empty');
-      listEl.innerHTML = '';
+      if (!append) {
+        listEl.innerHTML = '';
+      }
 
-      if (!items || items.length === 0) {
+      if ((!items || items.length === 0) && listEl.children.length === 0) {
         emptyEl.style.display = 'block';
         return;
       }
@@ -296,7 +340,11 @@
         `;
       }).join('');
 
-      listEl.innerHTML = html;
+      if (append) {
+        listEl.innerHTML += html;
+      } else {
+        listEl.innerHTML = html;
+      }
     }
 
     async function deleteHistoryItem(button) {
@@ -349,15 +397,26 @@
       });
     }
 
-    async function loadHistory() {
+    async function loadHistory(options) {
+      if (isHistoryLoading) {
+        return;
+      }
       if (!currentProfile || !currentProfile.userId) {
         setError('LINEユーザー情報の取得に失敗しました。画面を開き直してください。');
         return;
       }
+      const append = options && options.append === true;
+      if (!append) {
+        currentOffset = 0;
+        hasMoreHistory = false;
+        updateMoreButton();
+      }
       setLoading(true);
       setError('');
       document.getElementById('empty').style.display = 'none';
-      document.getElementById('list').innerHTML = '';
+      if (!append) {
+        document.getElementById('list').innerHTML = '';
+      }
 
       try {
         const response = await fetch(GAS_URL, {
@@ -368,7 +427,8 @@
             data: {
               userId: currentProfile.userId,
               status: currentStatus,
-              limit: DEFAULT_LIMIT
+              limit: PAGE_LIMIT,
+              offset: currentOffset
             }
           })
         });
@@ -379,7 +439,13 @@
         if (!payload.ok) {
           throw new Error(payload.error || '履歴取得に失敗しました');
         }
-        renderHistory(payload.items || []);
+        const items = payload.items || [];
+        renderHistory(items, append);
+        currentOffset = Number.isFinite(Number(payload.nextOffset))
+          ? Number(payload.nextOffset)
+          : currentOffset + items.length;
+        hasMoreHistory = Boolean(payload.hasMore);
+        updateMoreButton();
       } catch (error) {
         setError('履歴の取得に失敗しました: ' + error.message);
       } finally {
@@ -387,7 +453,17 @@
       }
     }
 
+    function loadMoreHistory() {
+      if (!hasMoreHistory || isHistoryLoading) {
+        return;
+      }
+      loadHistory({ append: true });
+    }
+
     function changeStatus(status) {
+      if (isHistoryLoading) {
+        return;
+      }
       currentStatus = status;
       applyFilterButtonState();
       loadHistory();
@@ -405,6 +481,7 @@
         clearPendingLiffForm();
         currentProfile = await liff.getProfile();
         applyFilterButtonState();
+        setLoading(false);
         await loadHistory();
       } catch (error) {
         setError('LIFFの初期化に失敗しました: ' + error.message);
