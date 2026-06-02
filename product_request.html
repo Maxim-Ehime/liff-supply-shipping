@@ -187,6 +187,7 @@
 
   <button id="submitButton" class="submit-btn" type="button">商品希望を送信する</button>
 
+  <script src="./liff_common.js"></script>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script>
     // const GAS_URL = "https://script.google.com/macros/s/AKfycbz6M7Gi704Vc3qlMQ7GD4Hh8mq0rf4I8QH-kqT7oOs1T8jkYJB6JQFQmMS3IhGD31VE/exec"; // 本番環境
@@ -201,27 +202,15 @@
     let pickedImages = [];
 
     function rememberPendingLiffForm(form) {
-      try {
-        sessionStorage.setItem('pendingLiffForm', form);
-        sessionStorage.setItem('pendingLiffFormTime', String(Date.now()));
-      } catch (error) {
-        // Ignore storage errors.
-      }
+      LiffRouting.rememberPendingLiffForm(form);
     }
 
     function clearPendingLiffForm() {
-      try {
-        sessionStorage.removeItem('pendingLiffForm');
-        sessionStorage.removeItem('pendingLiffFormTime');
-      } catch (error) {
-        // Ignore storage errors.
-      }
+      LiffRouting.clearPendingLiffForm();
     }
 
     function getLoginRedirectUri(form) {
-      const url = new URL('./index.html', window.location.href);
-      url.searchParams.set('form', form);
-      return url.href;
+      return LiffRouting.getLoginRedirectUri(form);
     }
 
     async function init() {

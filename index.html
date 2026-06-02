@@ -10,51 +10,87 @@
       const PENDING_FORM_KEY = 'pendingLiffForm';
       const PENDING_FORM_TIME_KEY = 'pendingLiffFormTime';
       const PENDING_FORM_TTL_MS = 120000;
+      const FORM_ROUTES = {
+        order: './order_form.html',
+        product: './product_request.html',
+        history: './history.html',
+        shipping: ''
+      };
+      const STATE_ROUTE_MATCHERS = {
+        order: ['order_form.html', 'form=order', 'page=order'],
+        product: ['product_request.html', 'form=product', 'page=product'],
+        history: ['history.html', 'form=history', 'page=history'],
+        shipping: ['page=shipping', 'form=shipping']
+      };
       const params = new URLSearchParams(window.location.search);
       const state = params.get('liff.state') || '';
       const decodedState = decodeURIComponent(state).toLowerCase();
       const directForm = String(params.get('form') || '').toLowerCase();
       const directPage = String(params.get('page') || '').toLowerCase();
-      const shippingPageRequested = decodedState.indexOf('page=shipping') !== -1 || directPage === 'shipping' || directForm === 'shipping';
-      let target = '';
-      let form = '';
-      let formSource = '';
+      const requested = resolveRequestedForm(directForm, directPage, decodedState);
+      const form = requested.form;
+      const formSource = requested.source;
+      const target = FORM_ROUTES[form] || '';
 
-      if (decodedState.indexOf('order_form.html') !== -1 || decodedState.indexOf('form=order') !== -1 || decodedState.indexOf('page=order') !== -1 || directForm === 'order' || directPage === 'order') {
-        form = 'order';
-        formSource = 'url';
-      } else if (decodedState.indexOf('product_request.html') !== -1 || decodedState.indexOf('form=product') !== -1 || decodedState.indexOf('page=product') !== -1 || directForm === 'product' || directPage === 'product') {
-        form = 'product';
-        formSource = 'url';
-      } else if (decodedState.indexOf('history.html') !== -1 || decodedState.indexOf('form=history') !== -1 || decodedState.indexOf('page=history') !== -1 || directForm === 'history' || directPage === 'history') {
-        form = 'history';
-        formSource = 'url';
-      } else if (shippingPageRequested) {
-        form = 'shipping';
-        formSource = 'url';
-      } else {
+      function resolveRequestedForm(formParam, pageParam, stateText) {
+        const direct = firstKnownForm([formParam, pageParam]);
+        if (direct) {
+          return { form: direct, source: 'url' };
+        }
+
+        const stateForm = resolveStateForm(stateText);
+        if (stateForm) {
+          return { form: stateForm, source: 'url' };
+        }
+
+        const pendingForm = getPendingForm();
+        if (pendingForm) {
+          return { form: pendingForm, source: 'pending' };
+        }
+
+        return { form: '', source: '' };
+      }
+
+      function firstKnownForm(values) {
+        for (let index = 0; index < values.length; index += 1) {
+          const value = String(values[index] || '').toLowerCase();
+          if (FORM_ROUTES.hasOwnProperty(value)) {
+            return value;
+          }
+        }
+        return '';
+      }
+
+      function resolveStateForm(stateText) {
+        const forms = Object.keys(STATE_ROUTE_MATCHERS);
+        for (let formIndex = 0; formIndex < forms.length; formIndex += 1) {
+          const formName = forms[formIndex];
+          const markers = STATE_ROUTE_MATCHERS[formName];
+          for (let markerIndex = 0; markerIndex < markers.length; markerIndex += 1) {
+            if (stateText.indexOf(markers[markerIndex]) !== -1) {
+              return formName;
+            }
+          }
+        }
+        return '';
+      }
+
+      function getPendingForm() {
         try {
-          const pendingForm = sessionStorage.getItem(PENDING_FORM_KEY);
+          const pendingForm = String(sessionStorage.getItem(PENDING_FORM_KEY) || '').toLowerCase();
           const pendingTime = Number(sessionStorage.getItem(PENDING_FORM_TIME_KEY));
           if (
-            (pendingForm === 'order' || pendingForm === 'history' || pendingForm === 'product') &&
+            FORM_ROUTES.hasOwnProperty(pendingForm) &&
+            pendingForm !== 'shipping' &&
             Number.isFinite(pendingTime) &&
             Date.now() - pendingTime < PENDING_FORM_TTL_MS
           ) {
-            form = pendingForm;
-            formSource = 'pending';
+            return pendingForm;
           }
         } catch (error) {
-          form = '';
+          // Continue without pending routing.
         }
-      }
-
-      if (form === 'order') {
-        target = './order_form.html';
-      } else if (form === 'product') {
-        target = './product_request.html';
-      } else if (form === 'history') {
-        target = './history.html';
+        return '';
       }
 
       function clearPendingForm() {
@@ -349,6 +385,7 @@
 
   <button class="submit-btn" onclick="submitShipping()">依頼を送信する</button>
 
+  <script src="./liff_common.js"></script>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script>
     if (!window.__LIFF_SPA_TARGET__) {
@@ -449,12 +486,7 @@
     }
 
     function clearPendingLiffForm() {
-      try {
-        sessionStorage.removeItem('pendingLiffForm');
-        sessionStorage.removeItem('pendingLiffFormTime');
-      } catch (error) {
-        // Ignore storage errors in restricted browser contexts.
-      }
+      LiffRouting.clearPendingLiffForm();
     }
 
     window.changeStepperQty = changeStepperQty;

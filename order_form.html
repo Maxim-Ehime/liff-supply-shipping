@@ -285,6 +285,7 @@
     </div>
   </div>
 
+  <script src="./liff_common.js"></script>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script>
     const supplyList1 = [
@@ -436,27 +437,15 @@
     }
 
     function clearPendingLiffForm() {
-      try {
-        sessionStorage.removeItem('pendingLiffForm');
-        sessionStorage.removeItem('pendingLiffFormTime');
-      } catch (error) {
-        // Ignore storage errors in restricted browser contexts.
-      }
+      LiffRouting.clearPendingLiffForm();
     }
 
     function rememberPendingLiffForm(form) {
-      try {
-        sessionStorage.setItem('pendingLiffForm', form);
-        sessionStorage.setItem('pendingLiffFormTime', String(Date.now()));
-      } catch (error) {
-        // Ignore storage errors in restricted browser contexts.
-      }
+      LiffRouting.rememberPendingLiffForm(form);
     }
 
     function getLoginRedirectUri(form) {
-      const url = new URL('./index.html', window.location.href);
-      url.searchParams.set('form', form);
-      return url.href;
+      return LiffRouting.getLoginRedirectUri(form);
     }
 
     window.onload = function () {

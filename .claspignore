@@ -3,6 +3,7 @@
 img/**
 node_modules/**
 outputs/**
+liff_common.js
 .env
 .gitignore
 package.json
