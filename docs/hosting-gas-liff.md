@@ -29,7 +29,7 @@ To switch clasp targets, edit only `scriptId` manually:
 
 Keep the rest of the file unchanged unless the clasp project structure changes.
 
-The HTML files also contain `GAS_URL` and `LIFF_ID`. When switching production/test behavior, update those constants consistently.
+`liff_config.js` contains the front-end `GAS_URL` and `LIFF_ID`. When switching production/test behavior, update `activeEnvironment` in that file and confirm the selected environment values before publishing the static LIFF pages.
 
 ## OAuth Authorization
 
