@@ -14,18 +14,23 @@
       const state = params.get('liff.state') || '';
       const decodedState = decodeURIComponent(state).toLowerCase();
       const directForm = String(params.get('form') || '').toLowerCase();
+      const directPage = String(params.get('page') || '').toLowerCase();
+      const shippingPageRequested = decodedState.indexOf('page=shipping') !== -1 || directPage === 'shipping' || directForm === 'shipping';
       let target = '';
       let form = '';
       let formSource = '';
 
-      if (decodedState.indexOf('order_form.html') !== -1 || decodedState.indexOf('form=order') !== -1 || directForm === 'order') {
+      if (decodedState.indexOf('order_form.html') !== -1 || decodedState.indexOf('form=order') !== -1 || decodedState.indexOf('page=order') !== -1 || directForm === 'order' || directPage === 'order') {
         form = 'order';
         formSource = 'url';
-      } else if (decodedState.indexOf('product_request.html') !== -1 || decodedState.indexOf('form=product') !== -1 || directForm === 'product') {
+      } else if (decodedState.indexOf('product_request.html') !== -1 || decodedState.indexOf('form=product') !== -1 || decodedState.indexOf('page=product') !== -1 || directForm === 'product' || directPage === 'product') {
         form = 'product';
         formSource = 'url';
-      } else if (decodedState.indexOf('history.html') !== -1 || decodedState.indexOf('form=history') !== -1 || directForm === 'history') {
+      } else if (decodedState.indexOf('history.html') !== -1 || decodedState.indexOf('form=history') !== -1 || decodedState.indexOf('page=history') !== -1 || directForm === 'history' || directPage === 'history') {
         form = 'history';
+        formSource = 'url';
+      } else if (shippingPageRequested) {
+        form = 'shipping';
         formSource = 'url';
       } else {
         try {
@@ -50,6 +55,15 @@
         target = './product_request.html';
       } else if (form === 'history') {
         target = './history.html';
+      }
+
+      if (form === 'shipping') {
+        try {
+          sessionStorage.removeItem(PENDING_FORM_KEY);
+          sessionStorage.removeItem(PENDING_FORM_TIME_KEY);
+        } catch (error) {
+          // Continue even if sessionStorage is unavailable.
+        }
       }
 
       if (target) {

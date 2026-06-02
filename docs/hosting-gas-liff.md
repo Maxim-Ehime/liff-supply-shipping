@@ -75,10 +75,22 @@ Using `text/plain` avoids a CORS preflight for these GAS Web App requests.
 
 ## LIFF Routing
 
+Rich menu URLs should enter through the LIFF endpoint and pass the intended page with `page`.
+
+Examples:
+
+- Shipping request: `https://liff.line.me/LIFF_ID/?page=shipping`
+- Supply order: `https://liff.line.me/LIFF_ID/?page=order`
+- Product request: `https://liff.line.me/LIFF_ID/?page=product`
+- Request history: `https://liff.line.me/LIFF_ID/?page=history`
+
+`page=shipping` stays on `index.html` because the shipping request form is the top page. `page=order`, `page=product`, and `page=history` are redirected with `location.replace()` to the existing individual HTML pages.
+
 Secondary forms call `liff.login({ redirectUri })` with `./index.html?form=...`.
 
 `index.html` redirects based on:
 
+- direct `page` query
 - direct `form` query
 - `liff.state`
 - short-lived `sessionStorage` key `pendingLiffForm`
